@@ -78,7 +78,14 @@ Both are read-only and **budget-bounded**: a result is trimmed to a token ceilin
   `git interpret-trailers --parse` reads these, and so does any Lore-style consumer.
 - **A git note** in `refs/notes/cairn`, keyed by commit SHA, holding that commit's decision atoms (and any rollups) as JSON. Notes travel with the repo, update without rewriting history, and never touch the working tree or a PR.
 
-Notes are **not** pushed by default. To share them: `git config --add remote.origin.push '+refs/notes/cairn:refs/notes/cairn'` (and the matching `fetch`).
+Notes are **not** fetched/pushed by default. To share them, add a fetch refspec (safe and additive) and push notes explicitly:
+
+```bash
+git config --add remote.origin.fetch '+refs/notes/cairn:refs/notes/cairn'   # fetch pulls notes
+git push origin refs/notes/cairn                                            # push notes
+```
+
+Avoid setting `remote.origin.push` to *only* the notes refspec — that would stop plain `git push` from pushing your branches.
 
 ## Configuration
 

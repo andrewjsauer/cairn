@@ -76,12 +76,14 @@ git notes --ref=cairn show HEAD              # atoms for the latest commit
 cat "$(git rev-parse --git-dir)/cairn/journal.jsonl"   # pending (un-consolidated) edits, if any
 ```
 
-Cairn's git notes are **local by default**. To share them:
+Cairn's git notes are **local by default**. To share them, add a fetch refspec (safe, additive) and push notes explicitly:
 
 ```bash
-git config --add remote.origin.push  '+refs/notes/cairn:refs/notes/cairn'
-git config --add remote.origin.fetch '+refs/notes/cairn:refs/notes/cairn'
+git config --add remote.origin.fetch '+refs/notes/cairn:refs/notes/cairn'   # fetch pulls notes
+git push origin refs/notes/cairn                                            # push notes
 ```
+
+Don't set `remote.origin.push` to only the notes refspec — plain `git push` would then stop pushing your branches.
 
 ---
 
