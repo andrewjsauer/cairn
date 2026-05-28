@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "cairn",
+  "displayName": "Cairn",
+  "version": "0.1.0",
+  "description": "A self-compacting, code-indexed decision graph for AI coding agents. Captures why code is the way it is, stores it git-natively as Lore-compatible records, and serves it back over MCP.",
+  "author": {
+    "name": "Andrew Sauer",
+    "email": "andrew@sauerapple.com"
+  },
+  "license": "MIT",
+  "keywords": ["decision-records", "lore", "mcp", "git-notes", "memory", "coding-agents"],
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json"
+}

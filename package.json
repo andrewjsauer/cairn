@@ -1,0 +1,28 @@
+{
+  "name": "cairn",
+  "version": "0.1.0",
+  "description": "A self-compacting, code-indexed decision graph for AI coding agents, built on git and Lore-compatible decision records, served over MCP.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "cairn": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "tsc",
+    "test": "tsx --test tests/*.test.ts",
+    "smoke": "node scripts/smoke.mjs",
+    "dogfood": "node scripts/dogfood.mjs",
+    "mcp": "node dist/mcp/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

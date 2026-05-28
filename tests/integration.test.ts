@@ -1,0 +1,148 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { openDecision, recordEdit, consolidate } from "../src/capture/index.js";
+import { readEntries } from "../src/store/index.js";
+import { atomsForFile, allAtoms } from "../src/mcp/graph.js";
+import { recall, type Complete } from "../src/engine/index.js";
+
+/**
+ * Full slice against a real git repo, with a fake complete() (no network):
+ * decision -> edit journal -> commit -> consolidate -> Lore trailers + notes,
+ * then read it all back through the MCP graph layer. This is the executable
+ * version of the Section 10 acceptance criteria.
+ */
+
+function gitC(repo: string, args: string[], input?: string): string {
+  return execFileSync("git", args, { cwd: repo, input, encoding: "utf8" }).trim();
+}
+
+function makeRepo(): string {
+  const repo = mkdtempSync(join(tmpdir(), "cairn-it-"));
+  gitC(repo, ["init", "-q"]);
+  gitC(repo, ["config", "user.email", "test@cairn.dev"]);
+  gitC(repo, ["config", "user.name", "Cairn Test"]);
+  gitC(repo, ["commit", "-q", "--allow-empty", "-m", "root"]);
+  return repo;
+}
+
+const fakeComplete: Complete = async (prompt) => {
+  if (prompt.includes("Cluster them")) return JSON.stringify({ clusters: [] });
+  if (prompt.startsWith("Summarize these related decisions")) {
+    return JSON.stringify({ summary: "rollup" });
+  }
+  return JSON.stringify({
+    intent: "retry transient failures twice before giving up",
+    summary:
+      "Wrapped the client call in a 2-attempt retry with backoff because the upstream is flaky on cold start.",
+    constraints: ["upstream cold-start can exceed 500ms"],
+    rejected: [{ alternative: "fail fast with no retry", reason: "caused spurious user-facing errors" }],
+    confidence: "high",
+  });
+};
+
+test("decision -> edit -> commit -> consolidate writes Lore trailers + notes, readable back", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T10:00:00.000Z";
+
+  // 1. Open a decision (the /cairn:decision path).
+  openDecision(repo, "retry transient failures twice before giving up", [], now);
+
+  // 2. Make an edit and journal it synchronously (the PostToolUse edit hook path).
+  mkdirSync(join(repo, "src"), { recursive: true });
+  const file = join(repo, "src", "client.ts");
+  writeFileSync(file, "export function call() { /* retry x2 */ }\n");
+  const entry = recordEdit(repo, {
+    toolName: "Write",
+    filePath: file,
+    reason: "added a 2-attempt retry with backoff",
+    ts: now,
+  });
+  assert.ok(entry, "edit was journaled");
+
+  // The journal entry is on disk immediately (survives /clear): assert it exists.
+  assert.equal(readEntries(repo).length, 1);
+
+  // 3. Commit (the change the agent made).
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: add retry to client"]);
+
+  // 4. Consolidate (the PostToolUse commit hook path), with the fake model.
+  const result = await consolidate(repo, fakeComplete, { now });
+  assert.equal(result.ok, true);
+  assert.equal(result.written, 1);
+  assert.equal(result.amended, true, "trailers amended onto the local commit");
+
+  // 5a. Interop: git's OWN parser reads the trailers we wrote.
+  const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  const parsed = gitC(repo, ["interpret-trailers", "--parse"], message);
+  assert.match(parsed, /^Lore-id: [0-9a-f]{8}$/m, "git interpret-trailers sees our Lore-id");
+  assert.match(parsed, /^Constraint: upstream cold-start can exceed 500ms$/m);
+  assert.match(parsed, /^Rejected: fail fast with no retry \| caused spurious user-facing errors$/m);
+  assert.match(parsed, /^Confidence: high$/m);
+
+  // 5b. The graph note exists on the (amended) HEAD.
+  const note = gitC(repo, ["notes", "--ref=cairn", "show", "HEAD"]);
+  const payload = JSON.parse(note);
+  assert.equal(payload.v, 1);
+  assert.equal(payload.atoms.length, 1);
+  assert.equal(payload.atoms[0].files[0], "src/client.ts");
+
+  // 6. The journal was cleared after promotion.
+  assert.equal(readEntries(repo).length, 0);
+
+  // 7. Read it back the way the MCP server does: why(file) and recent(n).
+  const why = recall(atomsForFile(repo, "src/client.ts"), {
+    file: "src/client.ts",
+    tokenBudget: 2000,
+  });
+  assert.equal(why.atoms.length, 1);
+  assert.match(why.atoms[0].intent, /retry transient failures/);
+
+  const recent = recall(allAtoms(repo), { recent: 5, tokenBudget: 2000 });
+  assert.ok(recent.atoms.length >= 1);
+});
+
+test("a missed consolidation loses nothing: the journal persists for the next run", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-21T10:00:00.000Z";
+  openDecision(repo, "tidy logging", [], now);
+  const file = join(repo, "log.ts");
+  writeFileSync(file, "export const log = () => {};\n");
+  recordEdit(repo, { toolName: "Write", filePath: file, reason: "added logger", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "chore: logging"]);
+
+  // Simulate a "missed" trigger: we simply don't consolidate yet.
+  assert.equal(readEntries(repo).length, 1, "journal entry still on disk");
+
+  // Next trigger picks it up.
+  const result = await consolidate(repo, fakeComplete, { now });
+  assert.equal(result.written, 1);
+  assert.equal(readEntries(repo).length, 0);
+});
+
+test("consolidation is idempotent on the same journal", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-22T10:00:00.000Z";
+  openDecision(repo, "cache results", [], now);
+  writeFileSync(join(repo, "cache.ts"), "export const cache = {};\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "cache.ts"), reason: "add cache", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: cache"]);
+
+  const first = await consolidate(repo, fakeComplete, { now });
+  // Re-journal the same edit and consolidate again; the atom id is content-hashed,
+  // so re-running must not create a second, conflicting Lore-id for the same work.
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "cache.ts"), reason: "add cache", ts: now });
+  const second = await consolidate(repo, fakeComplete, { now });
+  assert.equal(first.loreId, second.loreId, "same work -> same Lore-id");
+});
+
+// Keeps tsc/eslint from flagging the import in environments without it.
+void existsSync;
+void readFileSync;
