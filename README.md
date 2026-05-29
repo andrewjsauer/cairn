@@ -6,7 +6,7 @@ Git is a perfect record of *what* changed and an amnesiac about *why*. Cairn cap
 
 Cairn does not invent a format and does not run a backend. It emits [Lore](https://github.com/Ian-stetsenko/lore-protocol)-compatible commit trailers, keeps a compacted graph in a `refs/notes/cairn` git-notes namespace, and serves two read tools over the Model Context Protocol. It is single-player and local.
 
-> Cairn is a working name; the whole thing is renameable by find-and-replace.
+> **Cairn** (working name) — a cairn is a stack of stones hikers build to mark a trail, left so the next person to come through can find the way the last one already worked out. That is exactly the job here: leave a durable marker of the reasoning behind a piece of code, so the next traveler — usually an agent with no memory of yesterday — doesn't have to re-find the path from scratch.
 
 ---
 
@@ -24,6 +24,28 @@ fresh session                    ─▶  cairn MCP ─▶ why(file) | recent(n)
 A decision opens two ways: automatically when you **approve a plan** (the plan is the richest statement of intent there is), or manually with `/cairn:decision "<intent>"`. Consolidation runs at every inflection point — at a **commit** it writes Lore trailers onto the commit and updates the notes graph; at **compaction / session end / session start** there is no commit to amend, so it promotes the journal to the notes graph only, making in-flight reasoning queryable across sessions before it is committed.
 
 Capture is split from persistence on purpose. The reasoning is journaled the instant a file changes, so a `/clear`, a crash, or a compaction can't erase it. Turning that raw journal into clean Lore records happens later, at a commit. **Durability never waits for a commit and never depends on catching a teardown event** — a missed trigger loses nothing, because the journal survives and the next commit picks it up.
+
+## Why Cairn is different
+
+Every individual capability here already exists somewhere. The unoccupied space is the *intersection*, and Cairn occupies exactly that and nothing wider:
+
+- **Decision-record tools** (Lore, Contextual Commits, ADRs) are git-native and code-adjacent, but have no compaction and mostly no protocol — they grow until they're noise, and they never reach the agent.
+- **The memory layer** (mem0, Letta, Zep, native model-lab memory) is self-compacting and agent-served, but problem- or conversation-indexed: it remembers what you *talked about*, not why a specific line looks the way it does.
+- **Context platforms** (Sourcegraph, Augment, Unblocked) are automatic and agent-served, but are managed retrieval engines over many sources, not git-native decision graphs.
+
+What nobody has shipped as one thing is the full intersection — and that is Cairn:
+
+| Axis | Cairn |
+|---|---|
+| **Capture** | Automatic, at decision-time and edit-time — not a manual writeup step. |
+| **Index** | Bound to the **decision** that touched specific code — not a file, a folder, or a chat session. |
+| **Size** | Self-compacting under a per-agent token budget, so a month of work still fits a cold session. |
+| **Storage** | Git itself — Lore trailers + `refs/notes/cairn`. No backend; it travels with the repo. |
+| **Delivery** | Served to agents over MCP. |
+
+The sharpest, most underserved part is **code-indexed at decision granularity**. Most memory remembers conversations; very little remembers *why a particular piece of code exists*, bound to that code, in a form an agent can query. A file accumulates a **chain of decisions** over its life, and `why(file)` returns that whole chain — the evolution of the thinking is itself the context a newcomer needs.
+
+The discipline matters as much as the features. Everything except that middle layer is composed from proven pieces — git as the substrate, [Lore](https://github.com/Ian-stetsenko/lore-protocol) for the format, MCP for delivery — rather than reinvented. The one differentiated thing is the self-compacting, code-indexed graph in the middle, and Cairn refuses to drift into general agent memory, conversation memory, or a fifth competing capture format. Staying narrow is the strategy. See [DESIGN.md](DESIGN.md) for the full rationale and the honest risks.
 
 ## Quick start (about five minutes)
 
