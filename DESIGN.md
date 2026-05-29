@@ -1,6 +1,6 @@
 # Cairn — Design rationale
 
-This document is the part of the work that is as much the artifact as the code: what gap Cairn occupies, why it stays narrow, and why each substrate choice was made. If you only read one file to judge the project, read this one.
+This document is the part of the work that is as much the artifact as the code: what gap Cairn occupies, why it stays narrow, and why each substrate choice was made. The [README](README.md) is the five-minute version; this is the deep-dive behind it.
 
 ## The white space
 
