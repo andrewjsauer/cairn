@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "commit": "1f0b7793d2beec0ecee0b7583e691e17fb31e157",
+  "generatedAt": "2026-05-29T16:18:55.278Z",
+  "loreId": "13bae2a2",
+  "atoms": [
+    {
+      "id": "5760d38f",
+      "loreId": "5760d38f",
+      "level": 0,
+      "decisionId": "inferred-0a0eb536",
+      "intent": "Changes to DESIGN.md",
+      "summary": "Best call here: keep README as the punchy entry point and DESIGN as the deep-dive — they shouldn't duplicate the same table. Let me verify the two read as a clean, consistent pair rather than overlapping awkwardly, and fix anything that drifted.",
+      "files": [
+        "DESIGN.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-29T16:18:47.682Z",
+      "sourceIds": [
+        "j-2b1c94f7"
+      ]
+    }
+  ]
+}
