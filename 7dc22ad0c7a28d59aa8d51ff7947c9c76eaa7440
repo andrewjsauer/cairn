@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "commit": "7dc22ad0c7a28d59aa8d51ff7947c9c76eaa7440",
+  "generatedAt": "2026-05-29T15:59:11.045Z",
+  "loreId": "cba25511",
+  "atoms": [
+    {
+      "id": "31b909e3",
+      "loreId": "31b909e3",
+      "level": 0,
+      "decisionId": "inferred-58acd308",
+      "intent": "Changes to README.md",
+      "summary": "Everything's committed, pushed, and wired up. Here's the full picture.\n\n## Committed & published\n- **3 commits on `main`** → pushed to **private repo `andrewjsauer/cairn`** (https://github.com/andrewjsauer/cairn)\n  - `8e46baf` genesis (46 files), `7725a91` CI workflow, `0edf255` docs fix\n- **CI is green** — GitHub Actions ran `npm ci && npm run build && npm test` in 21s ✓\n\n## Installed into Claude Code (user scope — works in *every* repo)\n- **MCP server `cairn`** registered in `~/.claude.json` → status **Connected**. `why`/`recent` available everywhere.\n- **Capture hooks** merged into `~/.clau… Two edits. First, replace the working-name line with a definition of what a cairn is:",
+      "files": [
+        "README.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-29T15:59:05.048Z",
+      "sourceIds": [
+        "j-9388c0ad",
+        "j-fadf2eb1"
+      ]
+    }
+  ]
+}
