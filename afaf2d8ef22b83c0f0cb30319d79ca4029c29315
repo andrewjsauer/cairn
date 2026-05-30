@@ -1,0 +1,271 @@
+{
+  "v": 1,
+  "commit": "afaf2d8ef22b83c0f0cb30319d79ca4029c29315",
+  "generatedAt": "2026-05-30T15:39:00.986Z",
+  "loreId": "475cd181",
+  "atoms": [
+    {
+      "id": "f0f6b6ca",
+      "loreId": "f0f6b6ca",
+      "level": 0,
+      "decisionId": "inferred-93348b71",
+      "intent": "Changes to src/engine/compact.ts",
+      "summary": "The empty-tree anchor works perfectly — universal SHA, notes attach and list cleanly, no collision with per-commit notes. That's the rollup ledger.\n\nNow the implementation. First the engine: a pure `compactGraph()` (global variant of `compact`) plus provenance-flattening in `rollup()` so re-summarization keeps pointing at original atom ids. Let me read the current `rollup` to edit precisely.",
+      "files": [
+        "src/engine/compact.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:30:05.338Z",
+      "sourceIds": [
+        "j-3d492ca1",
+        "j-9bd467fc"
+      ]
+    },
+    {
+      "id": "489f7302",
+      "loreId": "489f7302",
+      "level": 0,
+      "decisionId": "inferred-825f6e32",
+      "intent": "Changes to src/engine/index.ts",
+      "summary": "Now add `compactGraph` (the global/dream variant) and export it.",
+      "files": [
+        "src/engine/index.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:30:09.199Z",
+      "sourceIds": [
+        "j-0f14a97d"
+      ]
+    },
+    {
+      "id": "bfd4c8c0",
+      "loreId": "bfd4c8c0",
+      "level": 0,
+      "decisionId": "inferred-60adc8b8",
+      "intent": "Changes to src/config.ts",
+      "summary": "Now add `compactGraph` (the global/dream variant) and export it.",
+      "files": [
+        "src/config.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:30:17.152Z",
+      "sourceIds": [
+        "j-d0972932"
+      ]
+    },
+    {
+      "id": "fce7b0ed",
+      "loreId": "fce7b0ed",
+      "level": 0,
+      "decisionId": "inferred-cd9d4839",
+      "intent": "Changes to src/store/git.ts",
+      "summary": "Now the config knob and the store-side graph anchor helper.",
+      "files": [
+        "src/store/git.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:30:24.024Z",
+      "sourceIds": [
+        "j-3f3156e2"
+      ]
+    },
+    {
+      "id": "a642260e",
+      "loreId": "a642260e",
+      "level": 0,
+      "decisionId": "inferred-1ccae0a3",
+      "intent": "Changes to src/capture/dream.ts",
+      "summary": "Now the config knob and the store-side graph anchor helper.",
+      "files": [
+        "src/capture/dream.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:31:05.662Z",
+      "sourceIds": [
+        "j-c1297959"
+      ]
+    },
+    {
+      "id": "59c137ce",
+      "loreId": "59c137ce",
+      "level": 0,
+      "decisionId": "inferred-0538cf87",
+      "intent": "Changes to src/capture/index.ts",
+      "summary": "Now the dream orchestration in capture — read the whole store, compact it globally, write the rollup ledger, prune old per-commit notes.",
+      "files": [
+        "src/capture/index.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:31:09.745Z",
+      "sourceIds": [
+        "j-4fe0958f"
+      ]
+    },
+    {
+      "id": "8197bf92",
+      "loreId": "8197bf92",
+      "level": 0,
+      "decisionId": "inferred-e5e232f1",
+      "intent": "Changes to src/cli.ts",
+      "summary": "Now the dream orchestration in capture — read the whole store, compact it globally, write the rollup ledger, prune old per-commit notes. Now wire the CLI — a manual `dream` command, and have `flush` run the dream when the store exceeds budget (sleep-time consolidation at session boundaries).",
+      "files": [
+        "src/cli.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:31:37.498Z",
+      "sourceIds": [
+        "j-39bdbf4f",
+        "j-a0f26514",
+        "j-ad368c40",
+        "j-be218df6"
+      ]
+    },
+    {
+      "id": "4f43d380",
+      "loreId": "4f43d380",
+      "level": 0,
+      "decisionId": "inferred-f371e870",
+      "intent": "Changes to tests/engine.test.ts",
+      "summary": "Now build and check for type errors before writing tests. Build is clean. Now tests — an engine test for `compactGraph` (bounding + flattened provenance) and an integration test for the full dream against a real repo.",
+      "files": [
+        "tests/engine.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "ea8d1db9"
+      ],
+      "createdAt": "2026-05-30T15:33:52.987Z",
+      "sourceIds": [
+        "j-6aa0fbb3",
+        "j-b30fd942"
+      ]
+    },
+    {
+      "id": "8d641084",
+      "loreId": "8d641084",
+      "level": 0,
+      "decisionId": "inferred-e2946f5f",
+      "intent": "Changes to tests/dream.test.ts",
+      "summary": "The research landed — and it strongly validates the native, no-dependency approach. I'll fold it into the docs. The headline:\n\n- **Dependency call: implement natively, depend on nothing.** mem0, Letta, and Zep all require a backend/vector-DB/graph-DB/server — incompatible with git-native single-player, and the techniques are trivially portable. This confirms the brief's \"inspiration only.\"\n- **My design already matches the best-practice patterns:** keep recent verbatim + summarize the tail (Focus Agent), cluster by shared entity then summarize (mem0/Zep — I cluster by shared *file*), threshold…",
+      "files": [
+        "tests/dream.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:34:14.609Z",
+      "sourceIds": [
+        "j-cd6e7a1d"
+      ]
+    },
+    {
+      "id": "a821d5b1",
+      "loreId": "a821d5b1",
+      "level": 0,
+      "decisionId": "inferred-4e5fda55",
+      "intent": "Changes to DESIGN.md",
+      "summary": "CLI commands run cleanly. Now the docs. Let me update DESIGN.md's compaction section with the dream + the research-backed no-dependency rationale.",
+      "files": [
+        "DESIGN.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "5760d38f"
+      ],
+      "createdAt": "2026-05-30T15:35:33.069Z",
+      "sourceIds": [
+        "j-22c88169"
+      ]
+    },
+    {
+      "id": "62f1d86e",
+      "loreId": "62f1d86e",
+      "level": 0,
+      "decisionId": "inferred-86412226",
+      "intent": "Changes to README.md",
+      "summary": "CLI commands run cleanly. Now the docs. Let me update DESIGN.md's compaction section with the dream + the research-backed no-dependency rationale. Now the README — the loop, the trigger list, and the now-resolved \"store scaling\" limitation.",
+      "files": [
+        "README.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "31b909e3",
+        "97f98290"
+      ],
+      "createdAt": "2026-05-30T15:36:16.097Z",
+      "sourceIds": [
+        "j-448ae418",
+        "j-cecb3ffe",
+        "j-dee6f2b6",
+        "j-df32d9a8"
+      ]
+    },
+    {
+      "id": "ec18583b",
+      "loreId": "ec18583b",
+      "level": 0,
+      "decisionId": "inferred-c435334f",
+      "intent": "Changes to scripts/dogfood.mjs",
+      "summary": "Let me add a dream step to the dogfood walkthrough so it's watchable, then run the full verify gate. The dogfood drives everything via the CLI. To make the dream *visible* (the small dogfood store won't exceed the default budget), I'll import `consolidateGraph` and run it with a tiny budget to show real compaction.",
+      "files": [
+        "scripts/dogfood.mjs"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:37:12.733Z",
+      "sourceIds": [
+        "j-606882bd",
+        "j-d9e6a096"
+      ]
+    },
+    {
+      "id": "2c10c87e",
+      "loreId": "2c10c87e",
+      "level": 0,
+      "decisionId": "inferred-4303a3ff",
+      "intent": "Changes to docs/research/memory-systems.md",
+      "summary": "The dream fires in the dogfood and coverage is preserved. Now the full verify gate, then commit and push.",
+      "files": [
+        "docs/research/memory-systems.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T15:38:44.573Z",
+      "sourceIds": [
+        "j-68a76315"
+      ]
+    }
+  ]
+}
