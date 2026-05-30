@@ -1,8 +1,8 @@
 {
   "v": 1,
   "commit": "1f0b7793d2beec0ecee0b7583e691e17fb31e157",
-  "generatedAt": "2026-05-30T14:38:38.896Z",
-  "loreId": "c22b9b10",
+  "generatedAt": "2026-05-30T14:39:28.677Z",
+  "loreId": "2bb1f4e7",
   "atoms": [
     {
       "id": "5760d38f",
@@ -41,6 +41,65 @@
       "sourceIds": [
         "j-1f0602c4",
         "j-a05f7fea"
+      ]
+    },
+    {
+      "id": "cda86887",
+      "loreId": "cda86887",
+      "level": 0,
+      "decisionId": "inferred-811f998a",
+      "intent": "Changes to scripts/verify.mjs",
+      "summary": "Fair warning — that block interpolated into a shell to get the pipe. The `${tmp}` is from `mktemp` (not user input) and this is a local dev tool, but I'll remove the shell entirely: use `execFileSync` with arg arrays and pipe via stdin, and `mkdtempSync`/`rmSync` instead of shelling out.",
+      "files": [
+        "scripts/verify.mjs"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "1dcd285f"
+      ],
+      "createdAt": "2026-05-30T14:38:43.690Z",
+      "sourceIds": [
+        "j-1349cba7"
+      ]
+    },
+    {
+      "id": "8ba91af3",
+      "loreId": "8ba91af3",
+      "level": 0,
+      "decisionId": "inferred-3a8dc8f8",
+      "intent": "Changes to package.json",
+      "summary": "Fair warning — that block interpolated into a shell to get the pipe. The `${tmp}` is from `mktemp` (not user input) and this is a local dev tool, but I'll remove the shell entirely: use `execFileSync` with arg arrays and pipe via stdin, and `mkdtempSync`/`rmSync` instead of shelling out.",
+      "files": [
+        "package.json"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T14:38:51.761Z",
+      "sourceIds": [
+        "j-ec72d1e5"
+      ]
+    },
+    {
+      "id": "8ad67e0e",
+      "loreId": "8ad67e0e",
+      "level": 0,
+      "decisionId": "inferred-8c8dee42",
+      "intent": "Changes to .github/workflows/ci.yml",
+      "summary": "Now wire `npm run verify` and point CI at it (it subsumes build+test and adds smoke + structural checks).",
+      "files": [
+        ".github/workflows/ci.yml"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T14:38:57.556Z",
+      "sourceIds": [
+        "j-491ca4ca"
       ]
     }
   ]
