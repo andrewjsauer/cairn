@@ -6,4 +6,5 @@
 export { openDecision, openDecisionFromPlan } from "./decision.js";
 export { recordEdit } from "./journalEntry.js";
 export { consolidate, type ConsolidateResult } from "./consolidate.js";
+export { consolidateGraph, type DreamResult } from "./dream.js";
 export { lastAssistantText } from "./transcript.js";

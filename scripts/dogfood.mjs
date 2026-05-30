@@ -17,6 +17,8 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { consolidateGraph } from "../dist/capture/index.js";
+import { makeComplete } from "../dist/complete.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const CLI = join(ROOT, "dist", "cli.js");
@@ -160,6 +162,18 @@ async function main() {
   console.log(why.split("\n").map((l) => "    " + l).join("\n"));
   console.log(c.dim("\n  recent(5):\n"));
   console.log(recent.split("\n").map((l) => "    " + l).join("\n"));
+
+  // 6. The dream (memory consolidation). Forced here with a tiny budget so it
+  //    fires on this small store; in real use it runs at session end/start (or
+  //    `cairn dream`) only once the store has grown past STORE_TOKEN_BUDGET.
+  console.log(`\n${c.bold("▶ 6. Sleep-time: the dream (global store compaction)")}`);
+  console.log(c.dim("  runs at SessionEnd/Start when the store exceeds budget — forced here with a tiny budget"));
+  const beforeAtoms = git(repo, ["notes", "--ref=cairn", "list"]).split("\n").filter(Boolean).length;
+  const dreamt = await consolidateGraph(repo, makeComplete(), { budget: 10 });
+  console.log("  " + c.green(`dreamt — ${dreamt.before} → ${dreamt.after} records, ${dreamt.rollups} rollup(s), pruned ${dreamt.prunedCommits} commit note(s)`));
+  show("rollup ledger on the empty-tree anchor", git(repo, ["notes", "--ref=cairn", "list"]).split("\n").filter(Boolean).length + " note(s) (was " + beforeAtoms + ")");
+  const stillThere = await readViaMcp(repo, "src/client.ts");
+  show("why('src/client.ts') after the dream", /No recorded/.test(stillThere.why) ? "LOST (bug!)" : c.green("still answers (coverage preserved)"));
 
   // Before/after
   console.log(`\n${c.bold("— Before / after —")}`);

@@ -61,6 +61,53 @@ export async function compact(
   return [...rollups, ...newRollups, ...keep];
 }
 
+/**
+ * compactGraph(): the GLOBAL, "dream" variant of compact, run over the entire
+ * accumulated store (not a single commit's batch). Keeps the newest level-0
+ * atoms verbatim within the budget and folds EVERYTHING older — old level-0
+ * atoms AND any existing rollups — into one updated rollup per file-cluster.
+ *
+ * Still one rollup level (no level-2): existing rollups are re-summarized and
+ * merged, not stacked. The number of rollups is bounded by the number of
+ * file-clusters, so the store stays bounded as history grows. Provenance
+ * (sourceIds) always points at original level-0 ids.
+ */
+export async function compactGraph(
+  atoms: Atom[],
+  complete: Complete,
+  opts: { tokenBudget: number }
+): Promise<Atom[]> {
+  const total = atoms.reduce((sum, a) => sum + atomTokens(a), 0);
+  if (total <= opts.tokenBudget) return atoms; // already bounded
+
+  const level0 = atoms.filter(isDecisionAtom).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const existingRollups = atoms.filter(isRollupAtom);
+
+  // Keep newest level-0 atoms that fit; the rest overflow into the compress set.
+  const keep: Atom[] = [];
+  const overflow: Atom[] = [];
+  let used = 0;
+  for (let i = level0.length - 1; i >= 0; i--) {
+    const cost = atomTokens(level0[i]);
+    if (used + cost <= opts.tokenBudget) {
+      keep.push(level0[i]);
+      used += cost;
+    } else {
+      overflow.push(level0[i]);
+    }
+  }
+
+  // Re-summarize old level-0 + all existing rollups, merged by shared files.
+  const toCompress = [...overflow, ...existingRollups];
+  if (toCompress.length === 0) return atoms;
+
+  const newRollups: RollupAtom[] = [];
+  for (const grp of groupByFileOverlap(toCompress)) {
+    newRollups.push(await rollup(grp, complete));
+  }
+  return [...newRollups, ...keep];
+}
+
 function groupByFileOverlap(atoms: Atom[]): Atom[][] {
   const parent = new Map<number, number>();
   const find = (x: number): number => {
@@ -90,7 +137,12 @@ function groupByFileOverlap(atoms: Atom[]): Atom[][] {
 
 async function rollup(group: Atom[], complete: Complete): Promise<RollupAtom> {
   const files = [...new Set(group.flatMap((a) => a.files))];
-  const sourceIds = group.map((a) => a.loreId).sort();
+  // Provenance chains to ORIGINAL level-0 ids: when a group member is itself a
+  // rollup (re-summarized during a global dream), flatten to its sources rather
+  // than pointing at the intermediate rollup. Keeps us at one rollup level.
+  const sourceIds = [
+    ...new Set(group.flatMap((a) => (isRollupAtom(a) ? a.sourceIds : [a.loreId]))),
+  ].sort();
   const createdAt = group.reduce(
     (max, a) => (a.createdAt > max ? a.createdAt : max),
     group[0].createdAt

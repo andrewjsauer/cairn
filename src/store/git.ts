@@ -74,6 +74,16 @@ export function headSha(cwd: string): string {
   return git(["rev-parse", "HEAD"], { cwd });
 }
 
+/**
+ * The git "empty tree" object, written into the object DB so a note can attach
+ * to it. Cairn uses it as a stable anchor for the compacted rollup ledger — it
+ * always exists, is never a real commit, and so never collides with a
+ * per-commit note. Universal SHA-1 value: 4b825dc6…
+ */
+export function graphAnchor(cwd: string): string {
+  return git(["hash-object", "-w", "-t", "tree", "--stdin"], { cwd, input: "" });
+}
+
 /** True if the given commit is already present on any remote-tracking branch. */
 export function isOnRemote(sha: string, cwd: string): boolean {
   const out = git(["branch", "-r", "--contains", sha], { cwd, allowFail: true });

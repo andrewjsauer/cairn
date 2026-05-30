@@ -12,6 +12,14 @@ export const RECALL_TOKEN_BUDGET = 2000;
 /** Token ceiling the graph is compacted to at consolidation time. */
 export const COMPACT_TOKEN_BUDGET = 4000;
 
+/**
+ * Token ceiling for the whole stored decision graph. When the accumulated store
+ * exceeds this, the "dream" pass (consolidateGraph) folds old records into
+ * rollups so the store stays bounded as history grows. The single budget knob
+ * for store compaction (see the non-goal: no recursive multi-level tuning).
+ */
+export const STORE_TOKEN_BUDGET = 16000;
+
 /** Default count for recent(n). */
 export const DEFAULT_RECENT = 10;
 

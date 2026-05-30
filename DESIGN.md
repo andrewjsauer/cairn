@@ -76,6 +76,18 @@ A clean dependency boundary is the load-bearing portfolio signal here: it is the
 
 Per the non-goals, Cairn ships **level-0 atoms plus one rollup level** — no recursive multi-level tuning. `compact()` keeps the newest atoms verbatim and folds the overflow into level-1 rollups grouped by shared files, recording each rollup's `sourceIds`. Those provenance fields mean a deeper level could be added later **without migrating stored data**. The per-agent budget that actually matters for "never outgrows the context window" is enforced at read time by `recall()`.
 
+### The dream: bounding the whole store (memory consolidation)
+
+Read-time `recall()` bounds what an agent *reads*, but the stored notes graph still grows one atom per decision forever. The **dream** (`consolidateGraph()`) bounds the *store*: when the whole graph exceeds `STORE_TOKEN_BUDGET`, it keeps the newest level-0 atoms verbatim and folds the older tail into one rollup per file-cluster, pruning the rolled-up atoms from their per-commit notes. The rollups live in a single ledger note on git's **empty-tree object** — a stable anchor that is never a real commit, so it never collides with a per-commit note. Commit-message Lore trailers are never touched: they are the permanent, human-visible record, so the *graph* is compactable but the *trailers* are not.
+
+This is the hierarchical, self-compacting "memory" idea — and the place it deliberately stops. A research pass over the current field (MemGPT/Letta, mem0, Zep, plus 2025–26 work on sleep-time compute and memory consolidation) produced one clear conclusion: **depend on none of them.** All three require a backend, vector DB, or graph DB and pull you toward being a memory *platform* — exactly the crowded, well-funded space the brief says to stay out of. Their effective *techniques*, though, are small and portable, and Cairn borrows them natively:
+
+- **Keep recent verbatim, summarize the tail** (Focus Agent / sliding-window) — `compactGraph` keeps newest level-0, rolls the rest.
+- **Cluster by a stable entity, then summarize each cluster** (mem0/Zep) — Cairn clusters by shared *file* (a stable code entity), so summaries are anchored, not free-floating, which avoids lossy-compression-of-lossy-compression drift.
+- **Trigger at a size threshold and at idle teardown, not inline** (Letta's *sleep-time compute*: ~5× test-time-compute reduction by amortizing) — the dream runs on `SessionEnd`/`SessionStart`/`PreCompact`, or on demand via `cairn dream`, never per write and never on a daemon.
+
+Structurally it is an **LSM tree**: per-commit notes are L0, the rollup ledger is L1, and compaction is size-triggered. Staying at one rollup level keeps it honestly bounded for a finite codebase (rollup count ≈ number of file-clusters) without becoming a tunable memory engine.
+
 ## What this is not (the non-goals are binding)
 
 No new capture format. No agent-memory platform, conversation memory, or general knowledge base. No hosted backend, database, web viewer, multiplayer, auth, or team layer — git is the only backend. No `search` or `summary` tools yet. No timer or background daemon — every trigger is event-driven. Building any of these would be a defect against the brief, and against the strategy: the discipline of *not* building them is what keeps the bet narrow and credible.

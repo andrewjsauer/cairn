@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ingest,
   compact,
+  compactGraph,
   recall,
   fiveDimensionOverlap,
   atomTokens,
@@ -145,6 +146,35 @@ test("compact rolls overflow into one rollup level, preserving provenance", asyn
   const covered = new Set(rollups.flatMap((r) => r.sourceIds));
   assert.ok(covered.size > 0);
   assert.ok(out.every((a) => a.level === 0 || a.level === 1), "only level-0 and level-1");
+});
+
+test("compactGraph bounds the whole store at one rollup level with flattened provenance", async () => {
+  // Six decisions on the same file, oldest -> newest.
+  const atoms = Array.from({ length: 6 }, (_, i) =>
+    mkAtom({
+      id: `a${i}`,
+      loreId: `a${i}`,
+      files: ["src/x.ts"],
+      intent: `decision ${i}`,
+      summary: `reasoning number ${i} `.repeat(20),
+      createdAt: `2026-05-${10 + i}T00:00:00.000Z`,
+    })
+  );
+  const budget = atomTokens(atoms[0]) * 2; // room for ~2 newest verbatim
+  const out = await compactGraph(atoms, fakeComplete({ rollup: "the merged arc" }), { tokenBudget: budget });
+
+  assert.ok(out.every((a) => a.level === 0 || a.level === 1), "only level-0 and level-1");
+  const rollups = out.filter(isRollupAtom);
+  assert.ok(rollups.length >= 1, "old atoms folded into a rollup");
+  assert.ok(out.some((a) => a.level === 0 && a.id === "a5"), "newest kept verbatim");
+  const covered = new Set(rollups.flatMap((r) => r.sourceIds));
+  assert.ok(covered.has("a0"), "oldest atom is covered by a rollup (nothing lost)");
+
+  // Re-dream over the output: still one level, provenance still points at originals.
+  const out2 = await compactGraph(out, fakeComplete({ rollup: "merged again" }), { tokenBudget: budget });
+  assert.ok(out2.every((a) => a.level === 0 || a.level === 1), "still one rollup level after re-dream");
+  const covered2 = new Set(out2.filter(isRollupAtom).flatMap((r) => r.sourceIds));
+  assert.ok(covered2.has("a0"), "provenance still references original ids, not the intermediate rollup");
 });
 
 test("fiveDimensionOverlap scores identical decisions high, unrelated low", () => {

@@ -17,11 +17,13 @@ plan approved / /cairn:decision  ─▶  opens a decision (intent + alternatives
 agent edits a file               ─▶  durable journal entry in .git/cairn/   [synchronous, no model call]
 you commit                       ─▶  consolidate: journal ─▶ Lore trailers on the commit
                                                 + decision atoms in refs/notes/cairn
-compaction / session end|start   ─▶  flush: journal ─▶ notes graph (no commit to amend)
+compaction / session end|start   ─▶  flush journal ─▶ notes graph, then dream: compact the store if over budget
 fresh session                    ─▶  cairn MCP ─▶ why(file) | recent(n)
 ```
 
 A decision opens two ways: automatically when you **approve a plan** (the plan is the richest statement of intent there is), or manually with `/cairn:decision "<intent>"`. Consolidation runs at every inflection point — at a **commit** it writes Lore trailers onto the commit and updates the notes graph; at **compaction / session end / session start** there is no commit to amend, so it promotes the journal to the notes graph only, making in-flight reasoning queryable across sessions before it is committed.
+
+At those same idle boundaries (or on demand via `cairn dream`), Cairn also **dreams**: when the whole stored graph has grown past a budget, it folds the oldest decisions into compact rollups so the store stays bounded as history accrues — the self-compacting "memory" step, run at sleep-time rather than inline. See [DESIGN.md](DESIGN.md#the-dream-bounding-the-whole-store-memory-consolidation).
 
 Capture is split from persistence on purpose. The reasoning is journaled the instant a file changes, so a `/clear`, a crash, or a compaction can't erase it. Turning that raw journal into clean Lore records happens later, at a commit. **Durability never waits for a commit and never depends on catching a teardown event** — a missed trigger loses nothing, because the journal survives and the next commit picks it up.
 
@@ -64,7 +66,7 @@ Install it as a user-level Claude Code plugin so it works in every repo. Point C
 - A `PostToolUse` hook journals every `Edit`/`Write`/`MultiEdit` to `.git/cairn/`.
 - A `PostToolUse` hook on `Bash` consolidates whenever it sees a `git commit`.
 - A `PostToolUse` hook on `ExitPlanMode` auto-opens a decision from the approved plan.
-- `PreCompact`, `SessionEnd`, and `SessionStart` hooks flush the journal to the notes graph.
+- `PreCompact`, `SessionEnd`, and `SessionStart` hooks flush the journal to the notes graph and dream (compact the store) if it has grown past budget.
 - An MCP server named `cairn` exposes `why` and `recent`.
 - A `/cairn:decision` command opens a decision manually.
 
@@ -128,13 +130,13 @@ Built against the brief, with the full capture/consolidation trigger set wired (
 - **MCP repo resolution.** The brief said "git rev-parse from the session working directory." A user/plugin MCP server is spawned once and its `cwd` isn't guaranteed to be the session repo, so Cairn resolves the active repo from `CLAUDE_PROJECT_DIR` (set in the server's env by Claude Code; `roots/list` is the documented fallback) and then runs `git rev-parse --show-toplevel` from there — same outcome, correct mechanism.
 - **Trailers via amend, guarded.** There is no native git-commit hook in Claude Code, so trailers are written onto the just-made commit with `git commit --amend`, **replacing** (not appending) any prior Cairn block so there is always exactly one `Lore-id` per commit. The amend is skipped automatically when it would be wrong — the commit is already on a remote-tracking branch, or the commit is **GPG/SSH-signed** (re-signing without consent is not Cairn's call). In both cases the git-note alone carries the reasoning; notes never rewrite history.
 - **Consolidation runs synchronously** inside the commit hook, so a commit pauses briefly while Haiku synthesizes. The Anthropic call and every git call have hard timeouts, and the hook always exits 0 — it never blocks indefinitely or fails the session.
-- **Compaction.** `compact()` (one rollup level) runs over each consolidation's atom set and is unit-tested; the per-agent budget is enforced at read time by `recall()`. Whole-history rollup into the notes graph is the next increment — the provenance fields needed for it are already stored, so no migration is required.
+- **Compaction is two-layer.** Read-time `recall()` bounds every `why`/`recent` result to a token budget regardless of graph size. The **dream** (`consolidateGraph` / `cairn dream`) bounds the *stored* graph: at idle boundaries it folds the oldest decisions into one rollup per file-cluster (one rollup level, single `STORE_TOKEN_BUDGET` knob), so the store stays bounded as history grows. Rollups live in a ledger note on git's empty-tree anchor; commit trailers are never rewritten.
 
 ### Known limitations (deliberate, for this pass)
 
 - **Commit attribution across a missed trigger.** If consolidation is missed at commit A and runs at commit B, the journaled edits from A are attributed to B (the journal binds to the current HEAD). This follows directly from the brief's "a missed trigger loses nothing" durability model. Per-commit bucketing is a later refinement; nothing is lost, only the commit a decision is filed under.
 - **Read-path scaling.** `why`/`recent` scan the whole `refs/notes/cairn` namespace (one git call per noted commit) on each call. Output is always budget-bounded, but the *work* grows with history. Fine for a single developer today; a process-level note cache is the planned fix.
-- **Self-compacting applies to what an agent *reads*, not the whole store.** `recall()` caps every result at a token budget regardless of graph size, and `compact()` rolls up each consolidation's atoms. But `compact()` runs per-batch — the cross-commit notes graph itself is not globally compacted, so the *stored* graph grows with history. Whole-history rollup is the next increment (provenance fields are already stored, so no migration). One honest edge: a single atom larger than the budget is still returned whole (with `truncated: true`) — recall never returns *nothing*.
+- **Self-compaction holds at one rollup level.** The dream bounds the store by folding old decisions into one rollup per file-cluster — so for a finite codebase the store is bounded (rollup count ≈ number of file-clusters). It does **not** recurse to deeper levels (a deliberate non-goal); if even the rollups exceed the budget, they're kept (provenance is stored, so a deeper level could be added later without migration). After the dream, a compacted commit's coarse Lore *trailer* is still surfaced as a per-commit fallback alongside the rollup. One honest edge: `recall` returns a single atom larger than the budget whole (with `truncated: true`) — it never returns *nothing*.
 
 ## Layout
 

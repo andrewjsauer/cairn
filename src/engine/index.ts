@@ -8,7 +8,7 @@
  */
 export * from "./types.js";
 export { ingest } from "./ingest.js";
-export { compact } from "./compact.js";
+export { compact, compactGraph } from "./compact.js";
 export { recall } from "./recall.js";
 export { fiveDimensionOverlap, SAME_DECISION_THRESHOLD } from "./overlap.js";
 export type { OverlapBreakdown } from "./overlap.js";

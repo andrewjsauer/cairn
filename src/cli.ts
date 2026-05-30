@@ -7,7 +7,8 @@
  *   cairn open-from-plan                (PostToolUse ExitPlanMode; opens a decision from the plan)
  *   cairn journal-edit                  (PostToolUse Edit|Write|MultiEdit; reads hook JSON on stdin)
  *   cairn consolidate-if-commit         (PostToolUse Bash; consolidates iff the command was a git commit)
- *   cairn flush                         (PreCompact / SessionEnd / SessionStart; notes-only consolidation)
+ *   cairn flush                         (PreCompact / SessionEnd / SessionStart; notes-only consolidation + dream if over budget)
+ *   cairn dream                         (manual: global store compaction / memory consolidation)
  *   cairn consolidate                   (manual / testing: force commit-style consolidation)
  *
  * Hooks must never break the session, so every command exits 0 and writes
@@ -20,6 +21,7 @@ import {
   openDecisionFromPlan,
   recordEdit,
   consolidate,
+  consolidateGraph,
   lastAssistantText,
 } from "./capture/index.js";
 import { makeComplete } from "./complete.js";
@@ -41,6 +43,8 @@ async function main(): Promise<void> {
       return cmdConsolidateIfCommit();
     case "flush":
       return cmdFlush();
+    case "dream":
+      return cmdDream();
     case "consolidate":
       return cmdConsolidate();
     default:
@@ -121,9 +125,30 @@ async function cmdConsolidateIfCommit(): Promise<void> {
 
 async function cmdFlush(): Promise<void> {
   // PreCompact / SessionEnd / SessionStart: promote the journal to the notes
-  // graph (no commit to amend), so in-flight reasoning is queryable next session.
+  // graph (no commit to amend), so in-flight reasoning is queryable next session,
+  // then "dream" — compact the whole store if it has grown past budget.
   const payload = await parseHookInput();
-  await runConsolidate(projectDir(payload.cwd), false);
+  const cwd = projectDir(payload.cwd);
+  await runConsolidate(cwd, false);
+  await runDream(cwd);
+}
+
+async function cmdDream(): Promise<void> {
+  await runDream(projectDir());
+}
+
+async function runDream(cwd: string): Promise<void> {
+  try {
+    const result = await consolidateGraph(cwd, makeComplete());
+    if (result.ok && result.rollups >= 0 && result.reason !== "within-budget" && result.before !== result.after) {
+      process.stderr.write(
+        `cairn: dreamt — compacted ${result.before} → ${result.after} records ` +
+          `(${result.rollups} rollup(s), pruned ${result.prunedCommits} commit note(s)).\n`
+      );
+    }
+  } catch (err) {
+    process.stderr.write(`cairn dream: ${(err as Error).message}\n`);
+  }
 }
 
 async function cmdConsolidate(): Promise<void> {
