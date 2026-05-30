@@ -9,24 +9,13 @@ import { fileURLToPath } from "node:url";
  * src/engine/ may import git, Claude Code, the store, the Anthropic SDK, or any
  * other Cairn layer. The engine takes an injected complete() and nothing else.
  *
- * This test fails the build if anyone ever adds such an import. It is the
- * executable form of the decoupling promise.
+ * This is enforced as an ALLOWLIST, not a denylist: every module specifier in
+ * the engine must be a relative `./` import (i.e. intra-engine). Anything else —
+ * an npm package, a `node:` builtin, or a `../` escape to another layer — fails
+ * the test, so the guarantee can't silently regress when a new import is added.
  */
 
 const ENGINE_DIR = fileURLToPath(new URL("../src/engine", import.meta.url));
-
-const FORBIDDEN: { pattern: RegExp; label: string }[] = [
-  { pattern: /["']node:child_process["']/, label: "child_process (git shelling)" },
-  { pattern: /["']node:fs["']/, label: "the filesystem (the engine is pure)" },
-  { pattern: /["']@anthropic-ai\/sdk["']/, label: "Anthropic SDK" },
-  { pattern: /["']@modelcontextprotocol\/sdk/, label: "MCP SDK" },
-  { pattern: /\.\.\/store/, label: "the store" },
-  { pattern: /\.\.\/capture/, label: "capture" },
-  { pattern: /\.\.\/mcp/, label: "the MCP layer" },
-  { pattern: /\.\.\/complete/, label: "the complete() adapter" },
-  { pattern: /\.\.\/config/, label: "the config module" },
-  { pattern: /["']simple-git["']/, label: "a git library" },
-];
 
 function tsFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -36,29 +25,41 @@ function tsFiles(dir: string): string[] {
   });
 }
 
-test("the engine has zero imports from git, Claude Code, the store, or the SDK", () => {
+/** Pull the module specifier from an import / export-from / dynamic-import / require line. */
+function moduleSpecifier(line: string): string | null {
+  const m =
+    line.match(/\bfrom\s*["']([^"']+)["']/) ||
+    line.match(/\bimport\s*\(\s*["']([^"']+)["']/) ||
+    line.match(/\brequire\(\s*["']([^"']+)["']/) ||
+    line.match(/^\s*import\s+["']([^"']+)["']/); // side-effect import
+  return m ? m[1] : null;
+}
+
+test("the engine imports nothing but its own relative modules (no git/CC/store/SDK)", () => {
   const files = tsFiles(ENGINE_DIR);
   assert.ok(files.length > 0, "expected engine source files");
   const violations: string[] = [];
+
   for (const file of files) {
-    const src = readFileSync(file, "utf8");
-    // Catch static imports, re-exports (`export ... from`), and dynamic import()/require().
-    const moduleLines = src
-      .split("\n")
-      .filter(
-        (l) =>
-          /^\s*import\b/.test(l) ||
-          /^\s*export\b[^;]*\bfrom\b/.test(l) ||
-          /\bimport\s*\(/.test(l) ||
-          /\brequire\(/.test(l)
-      );
-    for (const line of moduleLines) {
-      for (const { pattern, label } of FORBIDDEN) {
-        if (pattern.test(line)) {
-          violations.push(`${file}: depends on ${label}\n    ${line.trim()}`);
-        }
+    const lines = readFileSync(file, "utf8").split("\n");
+    for (const line of lines) {
+      const isModuleLine =
+        /^\s*import\b/.test(line) ||
+        /^\s*export\b[^;]*\bfrom\b/.test(line) ||
+        /\bimport\s*\(/.test(line) ||
+        /\brequire\(/.test(line);
+      if (!isModuleLine) continue;
+
+      // Type-only `import type { X } from "./types.js"` is fine — still a `./` path.
+      const spec = moduleSpecifier(line);
+      if (spec === null) continue; // not actually importing a module (e.g. `import.meta`)
+
+      // Allowlist: only intra-engine relative paths are permitted.
+      if (!spec.startsWith("./")) {
+        violations.push(`${file}: imports "${spec}" (only ./ intra-engine imports allowed)\n    ${line.trim()}`);
       }
     }
   }
+
   assert.deepEqual(violations, [], `engine decoupling violated:\n${violations.join("\n")}`);
 });

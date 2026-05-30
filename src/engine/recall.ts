@@ -59,6 +59,9 @@ function recallChain(
     used += cost;
   }
   kept.sort(byCreatedAsc);
+  // We always keep at least one atom even if it alone exceeds the budget
+  // ("always return something"); report that honestly as truncated.
+  if (used > budget) truncated = true;
   return { atoms: kept, tokensUsed: used, truncated };
 }
 
@@ -85,5 +88,6 @@ function recallRecent(
     kept.push(atom);
     used += cost;
   }
+  if (used > budget) truncated = true; // first atom alone may exceed the budget
   return { atoms: kept, tokensUsed: used, truncated };
 }

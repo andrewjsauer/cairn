@@ -56,19 +56,17 @@ if (m) assert("  all tests pass", m[2] === "0", `${m[1]} pass, ${m[2]} fail`);
 
 run("smoke: real MCP server over stdio (why/recent)", ["node", "scripts/smoke.mjs"]);
 
-// --- 2. Engine decoupling (hard rule, independent of the test runner) ---
-const FORBIDDEN = [
-  /["']node:child_process["']/, /["']node:fs["']/, /["']@anthropic-ai\/sdk["']/,
-  /["']@modelcontextprotocol\/sdk/, /\.\.\/store/, /\.\.\/capture/, /\.\.\/mcp/,
-  /\.\.\/complete/, /\.\.\/config/,
-];
-const engineViolations = tsFiles(join(ROOT, "src", "engine")).flatMap((f) => {
-  const lines = readFileSync(f, "utf8").split("\n").filter((l) =>
-    /^\s*import\b/.test(l) || /^\s*export\b[^;]*\bfrom\b/.test(l) || /\bimport\s*\(/.test(l) || /\brequire\(/.test(l)
-  );
-  return lines.filter((l) => FORBIDDEN.some((re) => re.test(l))).map((l) => `${f}: ${l.trim()}`);
-});
-assert("engine has zero forbidden imports (git/CC/store/SDK)", engineViolations.length === 0, engineViolations[0] || "");
+// --- 2. Engine decoupling (allowlist: engine may import ONLY its own ./ modules) ---
+const specOf = (l) =>
+  (l.match(/\bfrom\s*["']([^"']+)["']/) || l.match(/\bimport\s*\(\s*["']([^"']+)["']/) ||
+   l.match(/\brequire\(\s*["']([^"']+)["']/) || l.match(/^\s*import\s+["']([^"']+)["']/) || [])[1] ?? null;
+const engineViolations = tsFiles(join(ROOT, "src", "engine")).flatMap((f) =>
+  readFileSync(f, "utf8").split("\n")
+    .filter((l) => /^\s*import\b/.test(l) || /^\s*export\b[^;]*\bfrom\b/.test(l) || /\bimport\s*\(/.test(l) || /\brequire\(/.test(l))
+    .map(specOf).filter((s) => s && !s.startsWith("./"))
+    .map((s) => `${f}: imports "${s}"`)
+);
+assert("engine imports only its own ./ modules (no git/CC/store/SDK)", engineViolations.length === 0, engineViolations[0] || "");
 
 // --- 3. Read surface = exactly why + recent (non-goal: no search/summary) ---
 const server = readFileSync(join(ROOT, "src", "mcp", "server.ts"), "utf8");

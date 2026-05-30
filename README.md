@@ -134,6 +134,7 @@ Built against the brief, with the full capture/consolidation trigger set wired (
 
 - **Commit attribution across a missed trigger.** If consolidation is missed at commit A and runs at commit B, the journaled edits from A are attributed to B (the journal binds to the current HEAD). This follows directly from the brief's "a missed trigger loses nothing" durability model. Per-commit bucketing is a later refinement; nothing is lost, only the commit a decision is filed under.
 - **Read-path scaling.** `why`/`recent` scan the whole `refs/notes/cairn` namespace (one git call per noted commit) on each call. Output is always budget-bounded, but the *work* grows with history. Fine for a single developer today; a process-level note cache is the planned fix.
+- **Self-compacting applies to what an agent *reads*, not the whole store.** `recall()` caps every result at a token budget regardless of graph size, and `compact()` rolls up each consolidation's atoms. But `compact()` runs per-batch — the cross-commit notes graph itself is not globally compacted, so the *stored* graph grows with history. Whole-history rollup is the next increment (provenance fields are already stored, so no migration). One honest edge: a single atom larger than the budget is still returned whole (with `truncated: true`) — recall never returns *nothing*.
 
 ## Layout
 

@@ -117,6 +117,17 @@ test("recall enforces the token budget and reports truncation", async () => {
   assert.ok(result.tokensUsed <= tight);
 });
 
+test("recall reports truncated=true when the single kept atom exceeds the budget", async () => {
+  const big = mkAtom({
+    files: ["src/a.ts"],
+    summary: "x ".repeat(500), // ~250 tokens, well over a tiny budget
+  });
+  const result = recall([big], { file: "src/a.ts", tokenBudget: 10 });
+  assert.equal(result.atoms.length, 1, "always returns at least one atom");
+  assert.ok(result.tokensUsed > 10, "the kept atom exceeds the budget");
+  assert.equal(result.truncated, true, "and that is reported honestly as truncated");
+});
+
 test("recall recent(n) returns newest-first, capped at n", async () => {
   const atoms = await buildChain();
   const result = recall(atoms, { recent: 2, tokenBudget: 100000 });
