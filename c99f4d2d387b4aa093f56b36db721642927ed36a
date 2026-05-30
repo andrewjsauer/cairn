@@ -1,0 +1,109 @@
+{
+  "v": 1,
+  "commit": "c99f4d2d387b4aa093f56b36db721642927ed36a",
+  "generatedAt": "2026-05-30T14:49:57.000Z",
+  "loreId": "1792d37c",
+  "atoms": [
+    {
+      "id": "6c626763",
+      "loreId": "6c626763",
+      "level": 0,
+      "decisionId": "inferred-710012d5",
+      "intent": "Changes to src/engine/recall.ts",
+      "summary": "**It landed.** 13 agents, ~9 min, and it wrote `docs/verification/REPORT.md`. Here's the verdict.\n\n## `verify-cairn` result: READY-WITH-GAPS — 7 pass, 5 partial, **0 fail**\n\n**Ground-truth (the synthesizer re-ran it itself, not on trust):** `npm run build` clean · **28/28 tests** · smoke **9/9**.\n\nThe important finding: the adversarial agents **could not break anything** — no claim came back false. The 5 partials are honest edge-case/claim caveats, and they line up with what I'd already flagged. Four are worth acting on:\n\n1. **C6 (headline) — stubbed, not lived.** The before/after demo runs `f…",
+      "files": [
+        "src/engine/recall.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T14:48:16.121Z",
+      "sourceIds": [
+        "j-0ecc81e9",
+        "j-d4b82505"
+      ]
+    },
+    {
+      "id": "8d0a94e0",
+      "loreId": "8d0a94e0",
+      "level": 0,
+      "decisionId": "inferred-e9159a59",
+      "intent": "Changes to tests/decoupling.test.ts",
+      "summary": "Now C5 — switch the decoupling guard from a denylist to a stricter **allowlist**: every engine module specifier must be a relative `./` import (intra-engine). Anything else — npm package, `node:` builtin, `../` escape, nested or not — fails.",
+      "files": [
+        "tests/decoupling.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T14:48:40.614Z",
+      "sourceIds": [
+        "j-ba925525"
+      ]
+    },
+    {
+      "id": "58650afd",
+      "loreId": "58650afd",
+      "level": 0,
+      "decisionId": "inferred-32576a19",
+      "intent": "Changes to scripts/verify.mjs",
+      "summary": "Now C5 — switch the decoupling guard from a denylist to a stricter **allowlist**: every engine module specifier must be a relative `./` import (intra-engine). Anything else — npm package, `node:` builtin, `../` escape, nested or not — fails.",
+      "files": [
+        "scripts/verify.mjs"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "1dcd285f",
+        "cda86887"
+      ],
+      "createdAt": "2026-05-30T14:48:53.200Z",
+      "sourceIds": [
+        "j-b79159d6"
+      ]
+    },
+    {
+      "id": "97f98290",
+      "loreId": "97f98290",
+      "level": 0,
+      "decisionId": "inferred-3f227dff",
+      "intent": "Changes to README.md",
+      "summary": "Now mirror the allowlist in the `verify.mjs` gate, and sharpen the README's self-compacting/scaling honesty (C7).",
+      "files": [
+        "README.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "31b909e3"
+      ],
+      "createdAt": "2026-05-30T14:49:01.292Z",
+      "sourceIds": [
+        "j-cb36e9be"
+      ]
+    },
+    {
+      "id": "ea8d1db9",
+      "loreId": "ea8d1db9",
+      "level": 0,
+      "decisionId": "inferred-4f289329",
+      "intent": "Changes to tests/engine.test.ts",
+      "summary": "Now mirror the allowlist in the `verify.mjs` gate, and sharpen the README's self-compacting/scaling honesty (C7).",
+      "files": [
+        "tests/engine.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-05-30T14:49:12.854Z",
+      "sourceIds": [
+        "j-72b87c08"
+      ]
+    }
+  ]
+}
