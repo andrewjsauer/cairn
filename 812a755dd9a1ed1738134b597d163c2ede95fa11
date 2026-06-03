@@ -1,0 +1,234 @@
+{
+  "v": 1,
+  "commit": "812a755dd9a1ed1738134b597d163c2ede95fa11",
+  "generatedAt": "2026-06-03T18:19:58.331Z",
+  "loreId": "eaffd276",
+  "atoms": [
+    {
+      "id": "5f63f53f",
+      "loreId": "5f63f53f",
+      "level": 0,
+      "decisionId": "inferred-0ac4116c",
+      "intent": "Changes to src/store/git.ts",
+      "summary": "CI passed. Shipped clean — no fix cycles needed.\n\n## Shipped to main ✅\n\n**Commit:** `d7dfc4a` on `main` (pushed to `andrewjsauer/cairn`)\n**CI:** `CI / test` ✓ success in 21s — `npm run verify` (build + 47 tests + smoke + decoupling + Lore interop) green. Zero fix cycles.\n\nThe only CI note is a GitHub-platform deprecation warning (Node 20 actions → Node 24 by June 2026) — unrelated to this change, affects `actions/checkout@v4` and `actions/setup-node@v4`. Worth a one-line bump someday, but not blocking.\n\n### What landed\nThe full structural-staleness feature, end to end: brainstorm → plan → 4 im…",
+      "files": [
+        "src/store/git.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "38930329",
+        "fce7b0ed",
+        "0d331561"
+      ],
+      "createdAt": "2026-06-03T18:11:31.515Z",
+      "sourceIds": [
+        "j-4e063fcc",
+        "j-cada9b74"
+      ]
+    },
+    {
+      "id": "00ea4701",
+      "loreId": "00ea4701",
+      "level": 0,
+      "decisionId": "inferred-4bb86c77",
+      "intent": "Changes to src/engine/staleness.ts",
+      "summary": "The loop bound is awkward — let me clean it up:",
+      "files": [
+        "src/engine/staleness.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "5cd7f20b"
+      ],
+      "createdAt": "2026-06-03T18:11:45.267Z",
+      "sourceIds": [
+        "j-1ed2e48f"
+      ]
+    },
+    {
+      "id": "3ed88a17",
+      "loreId": "3ed88a17",
+      "level": 0,
+      "decisionId": "inferred-c7b4ada3",
+      "intent": "Changes to src/engine/index.ts",
+      "summary": "Now **R2** — the pure engine side:",
+      "files": [
+        "src/engine/index.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "489f7302",
+        "e56ba28b"
+      ],
+      "createdAt": "2026-06-03T18:11:51.298Z",
+      "sourceIds": [
+        "j-4f350061"
+      ]
+    },
+    {
+      "id": "9c860ecc",
+      "loreId": "9c860ecc",
+      "level": 0,
+      "decisionId": "inferred-e12bda54",
+      "intent": "Changes to src/store/staleness.ts",
+      "summary": "Now **R2** — the pure engine side: Now **R3** — the lazy rescue pass in `annotateStale`: Now the tests for all three pieces — engine rule, git parser, and the end-to-end rescue:",
+      "files": [
+        "src/store/staleness.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "b5fae874"
+      ],
+      "createdAt": "2026-06-03T18:15:01.823Z",
+      "sourceIds": [
+        "j-672557bb",
+        "j-f00e966b",
+        "j-fae9cb53"
+      ]
+    },
+    {
+      "id": "70fbce5c",
+      "loreId": "70fbce5c",
+      "level": 0,
+      "decisionId": "inferred-71c216c6",
+      "intent": "Changes to tests/staleness.test.ts",
+      "summary": "Now **R3** — the lazy rescue pass in `annotateStale`: Now the tests for all three pieces — engine rule, git parser, and the end-to-end rescue:",
+      "files": [
+        "tests/staleness.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "d25f3490",
+        "79d06c3a",
+        "3d0b30c4"
+      ],
+      "createdAt": "2026-06-03T18:12:36.556Z",
+      "sourceIds": [
+        "j-87ad3f6a",
+        "j-effadd32"
+      ]
+    },
+    {
+      "id": "51b42483",
+      "loreId": "51b42483",
+      "level": 0,
+      "decisionId": "inferred-2bae20d7",
+      "intent": "Changes to tests/integration.test.ts",
+      "summary": "Now the tests for all three pieces — engine rule, git parser, and the end-to-end rescue: Now thread the precomputed map through `annotateStale` so `atomsForFile` doesn't fetch it twice: Now thread the single map fetch through `atomsForFile` and the server: The integration test must mirror the server's pattern (one map shared by both calls):",
+      "files": [
+        "tests/integration.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "3f0e85f0"
+      ],
+      "createdAt": "2026-06-03T18:17:23.172Z",
+      "sourceIds": [
+        "j-4329f59c",
+        "j-65a00c82",
+        "j-6fb2f541",
+        "j-906f2c1b",
+        "j-91a628a0"
+      ]
+    },
+    {
+      "id": "647832f5",
+      "loreId": "647832f5",
+      "level": 0,
+      "decisionId": "inferred-304a685a",
+      "intent": "Changes to src/mcp/graph.ts",
+      "summary": "Now the tests for all three pieces — engine rule, git parser, and the end-to-end rescue: Let me strengthen the integration test with the old-path query direction too, then run everything:",
+      "files": [
+        "src/mcp/graph.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "1fb52156",
+        "900ea81a"
+      ],
+      "createdAt": "2026-06-03T18:16:29.496Z",
+      "sourceIds": [
+        "j-a432f060",
+        "j-af03b7cb",
+        "j-f50f445f"
+      ]
+    },
+    {
+      "id": "1ac373f3",
+      "loreId": "1ac373f3",
+      "level": 0,
+      "decisionId": "inferred-6bf4d9cd",
+      "intent": "Changes to src/engine/types.ts",
+      "summary": "Let me strengthen the integration test with the old-path query direction too, then run everything:",
+      "files": [
+        "src/engine/types.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "a628b30f"
+      ],
+      "createdAt": "2026-06-03T18:15:49.836Z",
+      "sourceIds": [
+        "j-19e57e25"
+      ]
+    },
+    {
+      "id": "09d5b9a6",
+      "loreId": "09d5b9a6",
+      "level": 0,
+      "decisionId": "inferred-58f9d3a6",
+      "intent": "Changes to src/engine/recall.ts",
+      "summary": "Let me strengthen the integration test with the old-path query direction too, then run everything:",
+      "files": [
+        "src/engine/recall.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "6c626763"
+      ],
+      "createdAt": "2026-06-03T18:16:20.167Z",
+      "sourceIds": [
+        "j-c0aa8ab1",
+        "j-e09f80d8"
+      ]
+    },
+    {
+      "id": "8ce81bf4",
+      "loreId": "8ce81bf4",
+      "level": 0,
+      "decisionId": "inferred-d25e12e8",
+      "intent": "Changes to src/mcp/server.ts",
+      "summary": "Now thread the single map fetch through `atomsForFile` and the server:",
+      "files": [
+        "src/mcp/server.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T18:16:45.683Z",
+      "sourceIds": [
+        "j-2ff94523",
+        "j-4752de8a"
+      ]
+    }
+  ]
+}
