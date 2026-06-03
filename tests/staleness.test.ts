@@ -170,6 +170,26 @@ test("renamesInHistory: parses git mv history, newest rename wins per old path",
   rmSync(repo, { recursive: true, force: true });
 });
 
+test("renamesInHistory: a renamed-away path that was RECREATED is its own canonical name", () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, "a.ts"), "original\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  execFileSync("git", ["mv", "a.ts", "b.ts"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "a -> b"], { cwd: repo });
+  // Recreate a.ts as a brand-new, unrelated file.
+  writeFileSync(join(repo, "a.ts"), "totally new content\n");
+  execFileSync("git", ["add", "a.ts"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "new a.ts"], { cwd: repo });
+
+  const renames = renamesInHistory(repo);
+  // a.ts is live at HEAD, so it must NOT resolve to b.ts — otherwise the new
+  // file's chain would leak into why(b.ts) and vice versa.
+  assert.equal(renames.has("a.ts"), false);
+  assert.equal(resolveRename("a.ts", renames), "a.ts");
+  rmSync(repo, { recursive: true, force: true });
+});
+
 test("renamesInHistory: empty for a repo with no renames (and no HEAD)", () => {
   const repo = makeRepo();
   assert.equal(renamesInHistory(repo).size, 0); // no HEAD

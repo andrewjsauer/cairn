@@ -133,8 +133,18 @@ export function filesAtHead(cwd: string): Set<string> {
  * per old path. One git call (`log --diff-filter=R --name-status`); -z gives
  * verbatim NUL-separated `R<score> old new` triples (no core.quotepath quoting),
  * -M forces rename detection even if the user disabled diff.renames. Used to
- * rescue renamed-but-live files from a false structural-staleness flag — fetched
- * lazily, only when some atom already looks stale.
+ * rescue renamed-but-live files from a false structural-staleness flag and to
+ * match a renamed file's chain by its canonical current name.
+ *
+ * An old path that is itself LIVE at HEAD is dropped from the map: a live path
+ * was recreated (or never really left), so it is its own canonical name.
+ * Resolving through it would leak the recreated file's chain into the rename
+ * target. The cost of this conservatism: once a renamed-away path is reused,
+ * reasoning recorded under it stays attributed to the path name, not to where
+ * the original content moved — path identity is genuinely ambiguous at that
+ * point, and we prefer no association over a contested one. (Same reasoning for
+ * the newest-rename-wins rule: resolving which rename was "active" when an atom
+ * was recorded would need per-rename dates for a pathological history shape.)
  */
 export function renamesInHistory(cwd: string): Map<string, string> {
   const out = git(["log", "-M", "--diff-filter=R", "--name-status", "-z", "--format="], {
@@ -152,6 +162,12 @@ export function renamesInHistory(cwd: string): Map<string, string> {
     // Output is newest-first; keep the newest rename for each old path.
     if (!renames.has(oldPath)) renames.set(oldPath, newPath);
     i += 3;
+  }
+  if (renames.size > 0) {
+    const live = filesAtHead(cwd);
+    for (const oldPath of [...renames.keys()]) {
+      if (live.has(oldPath)) renames.delete(oldPath);
+    }
   }
   return renames;
 }
