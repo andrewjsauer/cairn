@@ -24,10 +24,14 @@ export function formatRecent(n: number, result: RecallResult): string {
   return [head, "", body, budgetNote(result)].filter(Boolean).join("\n");
 }
 
+/** Terse, honest marker: the code this record describes is gone from HEAD. */
+const STALE_TAG = "  ⚠ STALE — code no longer present at HEAD";
+
 function renderForRead(atom: Atom): string {
   const date = atom.createdAt.slice(0, 10);
+  const stale = atom.stale ? STALE_TAG : "";
   if (isDecisionAtom(atom)) {
-    const lines: string[] = [`(${date}) ${atom.intent}  [lore-id ${atom.loreId}]`];
+    const lines: string[] = [`(${date}) ${atom.intent}  [lore-id ${atom.loreId}]${stale}`];
     if (atom.summary) lines.push(`   ${atom.summary}`);
     for (const c of atom.constraints) lines.push(`   • constraint: ${c}`);
     for (const r of atom.rejected) {
@@ -37,7 +41,7 @@ function renderForRead(atom: Atom): string {
     if (atom.supersedes.length) lines.push(`   supersedes: ${atom.supersedes.join(", ")}`);
     return lines.join("\n");
   }
-  return `(${date}) [rollup of ${atom.sourceIds.length}] ${atom.summary}  [lore-id ${atom.loreId}]`;
+  return `(${date}) [rollup of ${atom.sourceIds.length}] ${atom.summary}  [lore-id ${atom.loreId}]${stale}`;
 }
 
 function budgetNote(result: RecallResult): string {

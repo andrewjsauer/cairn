@@ -1,4 +1,5 @@
 import type { Atom, DecisionAtom } from "../engine/index.js";
+import { isStale } from "../engine/index.js";
 import {
   readAllAtoms,
   listNotes,
@@ -7,6 +8,7 @@ import {
   commitSubject,
   commitDate,
   filesChanged,
+  filesAtHead,
   type LoreRecord,
 } from "../store/index.js";
 
@@ -23,7 +25,18 @@ import {
  */
 
 export function allAtoms(cwd: string): Atom[] {
-  return dedupe(readAllAtoms(cwd).map((x) => x.atom));
+  return annotateStale(dedupe(readAllAtoms(cwd).map((x) => x.atom)), cwd);
+}
+
+/**
+ * Mark each atom stale when the code it describes is gone from HEAD. Derived at
+ * read time (one git snapshot, then pure set membership), never persisted — so a
+ * cold-session agent can tell "reasoning about deleted code" from "current".
+ */
+function annotateStale(atoms: Atom[], cwd: string): Atom[] {
+  const live = filesAtHead(cwd);
+  for (const atom of atoms) atom.stale = isStale(atom, live);
+  return atoms;
 }
 
 export function atomsForFile(cwd: string, file: string): Atom[] {
@@ -42,7 +55,7 @@ export function atomsForFile(cwd: string, file: string): Atom[] {
     if (record) fromTrailers.push(trailerToAtom(record, sha, cwd));
   }
 
-  return dedupe([...fromNotes, ...fromTrailers]);
+  return annotateStale(dedupe([...fromNotes, ...fromTrailers]), cwd);
 }
 
 /** Keep one atom per Lore-id (the newest), so a note atom and its own commit

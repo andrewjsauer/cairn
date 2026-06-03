@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { openDecision, recordEdit, consolidate } from "../src/capture/index.js";
 import { readEntries } from "../src/store/index.js";
 import { atomsForFile, allAtoms } from "../src/mcp/graph.js";
+import { formatChain } from "../src/mcp/format.js";
 import { recall, type Complete } from "../src/engine/index.js";
 
 /**
@@ -141,6 +142,45 @@ test("consolidation is idempotent on the same journal", async () => {
   recordEdit(repo, { toolName: "Write", filePath: join(repo, "cache.ts"), reason: "add cache", ts: now });
   const second = await consolidate(repo, fakeComplete, { now });
   assert.equal(first.loreId, second.loreId, "same work -> same Lore-id");
+});
+
+test("U2: read path flags atoms whose code is gone, preserving order, dropping nothing", async () => {
+  const repo = makeRepo();
+
+  // Decision A touches keep.ts (older); decision B touches gone.ts (newer).
+  for (const [i, f] of [["a", "keep.ts"], ["b", "gone.ts"]].entries()) {
+    const now = `2026-05-2${5 + i}T10:00:00.000Z`;
+    openDecision(repo, `decision about ${f[1]}`, [], now);
+    writeFileSync(join(repo, f[1]), `// ${f[0]}\n`);
+    recordEdit(repo, { toolName: "Write", filePath: join(repo, f[1]), reason: `work on ${f[1]}`, ts: now });
+    gitC(repo, ["add", "-A"]);
+    gitC(repo, ["commit", "-q", "-m", `feat: ${f[1]}`]);
+    await consolidate(repo, fakeComplete, { now });
+  }
+
+  // Delete gone.ts — no superseding decision is opened, exactly the gap.
+  gitC(repo, ["rm", "-q", "gone.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "chore: drop gone.ts"]);
+
+  // recent(): newest-first order preserved, only the deleted-code atom flagged.
+  const recent = recall(allAtoms(repo), { recent: 5, tokenBudget: 2000 });
+  assert.equal(recent.atoms.length, 2);
+  assert.deepEqual(recent.atoms[0].files, ["gone.ts"], "newest first — order unchanged");
+  assert.equal(recent.atoms[0].stale, true, "deleted-code atom flagged");
+  assert.deepEqual(recent.atoms[1].files, ["keep.ts"]);
+  assert.equal(recent.atoms[1].stale, false, "live-code atom not flagged");
+
+  // why(gone.ts): the whole chain is stale, still returned, nothing dropped.
+  const whyGone = recall(atomsForFile(repo, "gone.ts"), { file: "gone.ts", tokenBudget: 2000 });
+  assert.equal(whyGone.atoms.length, 1);
+  assert.equal(whyGone.atoms[0].stale, true);
+  assert.match(formatChain("gone.ts", whyGone), /STALE — code no longer present/);
+
+  // why(keep.ts): unaffected.
+  const whyKeep = recall(atomsForFile(repo, "keep.ts"), { file: "keep.ts", tokenBudget: 2000 });
+  assert.equal(whyKeep.atoms.length, 1);
+  assert.equal(whyKeep.atoms[0].stale, false);
+  assert.doesNotMatch(formatChain("keep.ts", whyKeep), /STALE/);
 });
 
 // Keeps tsc/eslint from flagging the import in environments without it.
