@@ -23,6 +23,8 @@ The unoccupied intersection is **all four at once**: automatic capture, indexed 
 
 Cairn answers exactly one question — *"why is this code the way it is, and how did the thinking evolve?"* — and refuses to drift into general agent memory, conversation memory, or a competing capture format. Each individual capability already exists somewhere; Cairn is the composition plus one differentiated layer (the self-compacting, code-indexed graph in the middle).
 
+**A fixed purpose is what makes the memory principled.** The hardest problem in any memory system is not storage or retrieval — it is the significance function: deciding which parts of the past deserve to survive because they change future behavior. A generic store has no principled answer; it either keeps everything (postponed judgment) or guesses. Cairn's single question *is* its loss function. Every keep/fold/evict choice in the engine is evaluable against one test — does this help an agent answer *why is this code the way it is?* — which is why the compaction can be principled rather than arbitrary. Memory, on this view, is **retained consequence**: a decision record (the constraint that forced the shape, the alternatives that were rejected) is precisely the part of past work that changes future work. Everything else is noise the dream is allowed to fold.
+
 **Narrowness is the strategy, not a limitation.** The self-compacting engine generalizes naturally to "memory for any agent" — which is precisely the most crowded, best-funded part of the stack (mem0, Letta, Zep, and the labs). Walking in there means fighting all of them at once. Staying code-indexed and decision-scoped keeps Cairn out of everyone's direct line of fire and pointed at the part that is genuinely open. If a lab ships the simple version natively, Cairn will have been the thing they shipped, in their stack — which is its own kind of useful.
 
 ## Substrate choices
@@ -33,6 +35,8 @@ Durable records live in git, never a SaaS backend. It is free, it survives forks
 
 - **Lore-compatible commit trailers** for the human-visible decision record. Trailers are interoperable (`git interpret-trailers --parse` and any Lore consumer read them), they sit where the code is, and they make the reasoning legible to a human reading `git log`.
 - **A `refs/notes/cairn` git-notes namespace** for the compacted graph and the decision atoms. Notes update *without rewriting history*, produce *no working-tree or pull-request noise*, and travel with the repo. They are keyed by commit SHA, so a commit's note explains that commit's decisions.
+
+The two surfaces are also a deliberate **episodic/semantic split**. Trailers are the episodic layer: exact, human-readable, attached to the evidence (the commit), and never compacted or reinterpreted. The notes graph is the semantic layer: structured, queryable, and compactable. The dream can fold the graph aggressively precisely because the exact record survives beneath it — the semantic memory always has something stable to check itself against.
 
 ### Don't invent a format
 
