@@ -1,0 +1,136 @@
+{
+  "v": 1,
+  "commit": "0a948d17f765befd529195c949ca91c605b02926",
+  "generatedAt": "2026-06-03T16:56:11.667Z",
+  "loreId": "0d5ca456",
+  "atoms": [
+    {
+      "id": "38930329",
+      "loreId": "38930329",
+      "level": 0,
+      "decisionId": "inferred-442b3287",
+      "intent": "Changes to src/store/git.ts",
+      "summary": "Strong findings. Let me dedup and triage against the plan's documented intent:\n\n**Real bugs worth fixing now:**\n- **`filesAtHead` path-quoting mismatch** (Angle A, multiple votes): `git ls-tree -r --name-only HEAD` C-quotes non-ASCII paths under the default `core.quotepath=true`, but note-derived `atom.files` come from `repoRelativePath` as raw UTF-8 — so the Set never matches → live files with non-ASCII names wrongly flagged STALE. Real.\n- **Empty-set-on-error** (Angle C/A): `filesAtHead` returns `{}` on *any* git failure (lock contention, timeout), not just no-HEAD → every atom flagged stale…",
+      "files": [
+        "src/store/git.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "fce7b0ed",
+        "0d331561"
+      ],
+      "createdAt": "2026-06-03T16:53:44.350Z",
+      "sourceIds": [
+        "j-c189ee19"
+      ]
+    },
+    {
+      "id": "b5fae874",
+      "loreId": "b5fae874",
+      "level": 0,
+      "decisionId": "inferred-4fdf90da",
+      "intent": "Changes to src/store/staleness.ts",
+      "summary": "`repoRelativePath` returns raw UTF-8 (OS-native separators). So the quoting fix is: have `filesAtHead` emit verbatim paths via `-z` (disables `core.quotepath` C-quoting), which matches the raw `atom.files`. Windows backslash-vs-slash is a pre-existing whole-system concern (recall's existing `touchesFile` already compares these), not staleness-specific — out of scope here; POSIX `relative()` yields forward slashes matching git.\n\nApplying the three fixes. First, `filesAtHead` with `-z`:",
+      "files": [
+        "src/store/staleness.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:53:53.110Z",
+      "sourceIds": [
+        "j-6b274f30"
+      ]
+    },
+    {
+      "id": "387719b0",
+      "loreId": "387719b0",
+      "level": 0,
+      "decisionId": "inferred-12b7629b",
+      "intent": "Changes to src/store/index.ts",
+      "summary": "Now extract `annotateStale` to the store with the empty-set guard:",
+      "files": [
+        "src/store/index.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:53:57.662Z",
+      "sourceIds": [
+        "j-bf90e5a7"
+      ]
+    },
+    {
+      "id": "1fb52156",
+      "loreId": "1fb52156",
+      "level": 0,
+      "decisionId": "inferred-9f8d75d8",
+      "intent": "Changes to src/mcp/graph.ts",
+      "summary": "Now extract `annotateStale` to the store with the empty-set guard: Now update `graph.ts` to use the shared helper instead of its local copy:",
+      "files": [
+        "src/mcp/graph.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "900ea81a"
+      ],
+      "createdAt": "2026-06-03T16:54:09.415Z",
+      "sourceIds": [
+        "j-03556a20",
+        "j-3f000ca0"
+      ]
+    },
+    {
+      "id": "b1e41104",
+      "loreId": "b1e41104",
+      "level": 0,
+      "decisionId": "inferred-4066090e",
+      "intent": "Changes to src/capture/dream.ts",
+      "summary": "Now update `graph.ts` to use the shared helper instead of its local copy: Now `dream.ts` — use the shared helper and move annotation below the budget early-return:",
+      "files": [
+        "src/capture/dream.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "a12ff6ad",
+        "a642260e"
+      ],
+      "createdAt": "2026-06-03T16:54:23.678Z",
+      "sourceIds": [
+        "j-4c953a90",
+        "j-fc8cd0b3"
+      ]
+    },
+    {
+      "id": "d25f3490",
+      "loreId": "d25f3490",
+      "level": 0,
+      "decisionId": "inferred-995f3c1f",
+      "intent": "Changes to tests/staleness.test.ts",
+      "summary": "Now `dream.ts` — use the shared helper and move annotation below the budget early-return: Now tests for the two fixes — non-ASCII path matching and the empty-set guard. Let me add them to `staleness.test.ts`:",
+      "files": [
+        "tests/staleness.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "79d06c3a",
+        "3d0b30c4"
+      ],
+      "createdAt": "2026-06-03T16:54:44.106Z",
+      "sourceIds": [
+        "j-0440e947",
+        "j-0e42768a"
+      ]
+    }
+  ]
+}
