@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { isStale, type DecisionAtom, type RollupAtom } from "../src/engine/index.js";
-import { filesAtHead } from "../src/store/index.js";
+import { filesAtHead, writeNote, readNote } from "../src/store/index.js";
 
 /**
  * Structural staleness: the pure rule (engine, no git) plus the HEAD snapshot
@@ -113,5 +113,31 @@ test("filesAtHead: empty repo with no HEAD -> empty set, no throw", () => {
   const repo = makeRepo();
   const live = filesAtHead(repo);
   assert.equal(live.size, 0);
+  rmSync(repo, { recursive: true, force: true });
+});
+
+// --- U4: the derived flag never persists -----------------------------------
+
+test("writeNote strips the derived `stale` flag before serializing", () => {
+  const repo = makeRepo();
+  execFileSync("git", ["commit", "-q", "--allow-empty", "-m", "root"], { cwd: repo });
+  const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
+
+  const live = decisionAtom(["live.ts"]);
+  live.stale = false;
+  const dead = decisionAtom(["gone.ts"]);
+  dead.loreId = dead.id = "a2";
+  dead.stale = true;
+
+  writeNote(sha, { v: 1, commit: sha, generatedAt: "2026-06-01T00:00:00.000Z", loreId: "x", atoms: [live, dead] }, repo);
+
+  // raw JSON carries no `stale` key at all, and parsed atoms are undefined-stale
+  const raw = execFileSync("git", ["notes", "--ref=cairn", "show", sha], { cwd: repo, encoding: "utf8" });
+  assert.equal(raw.includes("\"stale\""), false);
+  const payload = readNote(sha, repo);
+  assert.ok(payload);
+  for (const a of payload!.atoms) assert.equal(a.stale, undefined);
+  // the rest of the atom survived intact (only `stale` was dropped)
+  assert.deepEqual(payload!.atoms.map((a) => a.loreId).sort(), ["a1", "a2"]);
   rmSync(repo, { recursive: true, force: true });
 });
