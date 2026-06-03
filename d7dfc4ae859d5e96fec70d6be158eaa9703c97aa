@@ -1,0 +1,29 @@
+{
+  "v": 1,
+  "commit": "d7dfc4ae859d5e96fec70d6be158eaa9703c97aa",
+  "generatedAt": "2026-06-03T16:56:28.135Z",
+  "loreId": "d482ce7c",
+  "atoms": [
+    {
+      "id": "93641040",
+      "loreId": "93641040",
+      "level": 0,
+      "decisionId": "inferred-0e23f0e8",
+      "intent": "Changes to docs/plans/2026-06-03-001-feat-atom-staleness-plan.md",
+      "summary": "All 47 tests pass (45 + 2 new), build clean, full verify gate green — decoupling still holds (the new `store/staleness.ts` imports the engine, which is the allowed direction; engine imports nothing outward). I verified the remaining candidates against the plan's documented intent rather than spawning more agents: rename false-positives are explicitly deferred (KTD7), greedy-fill keeping a fitting stale atom is exactly what the plan specified, and the rollup/tie behaviors match contract.\n\nCommitting the review fixes.",
+      "files": [
+        "docs/plans/2026-06-03-001-feat-atom-staleness-plan.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "c527042d"
+      ],
+      "createdAt": "2026-06-03T16:56:16.636Z",
+      "sourceIds": [
+        "j-c6d1c43f"
+      ]
+    }
+  ]
+}
