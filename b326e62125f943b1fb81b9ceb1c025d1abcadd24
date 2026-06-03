@@ -1,0 +1,54 @@
+{
+  "v": 1,
+  "commit": "b326e62125f943b1fb81b9ceb1c025d1abcadd24",
+  "generatedAt": "2026-06-03T20:48:30.138Z",
+  "loreId": "ba6defaa",
+  "atoms": [
+    {
+      "id": "9efa8ad1",
+      "loreId": "9efa8ad1",
+      "level": 0,
+      "decisionId": "inferred-23636401",
+      "intent": "Changes to DESIGN.md",
+      "summary": "My honest read, in order of confidence:\n\n**The doc reframes: just do them, no process.** They're writing, not engineering — 20 lines across DESIGN.md and README. \"Memory is retained consequence\" and purpose-as-loss-function genuinely sharpen the narrowness argument, and the two-layer-substrate claim (exact trailers / compactable graph) is positioning Cairn has already earned but never stated. Running a brainstorm for prose edits would be ceremony for its own sake.\n\n**The revert feature: brainstorm first — and this time the forks are meatier than staleness had.** When I poke at the design space…",
+      "files": [
+        "DESIGN.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "5760d38f",
+        "a821d5b1"
+      ],
+      "createdAt": "2026-06-03T20:47:46.161Z",
+      "sourceIds": [
+        "j-323fb3a6",
+        "j-b3c98a79"
+      ]
+    },
+    {
+      "id": "1effc9ae",
+      "loreId": "1effc9ae",
+      "level": 0,
+      "decisionId": "inferred-dfd1bca4",
+      "intent": "Changes to README.md",
+      "summary": "Now the README — one tight addition after the differentiator table:",
+      "files": [
+        "README.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "31b909e3",
+        "62f1d86e",
+        "97f98290"
+      ],
+      "createdAt": "2026-06-03T20:48:21.025Z",
+      "sourceIds": [
+        "j-1cd12d9d"
+      ]
+    }
+  ]
+}
