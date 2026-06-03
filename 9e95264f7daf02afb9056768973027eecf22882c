@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "commit": "9e95264f7daf02afb9056768973027eecf22882c",
+  "generatedAt": "2026-06-03T16:40:08.850Z",
+  "loreId": "1efd1673",
+  "atoms": [
+    {
+      "id": "64e229bc",
+      "loreId": "64e229bc",
+      "level": 0,
+      "decisionId": "inferred-9b745a34",
+      "intent": "Changes to src/store/notes.ts",
+      "summary": "Decoupling holds — `staleness.ts` imports only types. Committing U1.",
+      "files": [
+        "src/store/notes.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:39:42.037Z",
+      "sourceIds": [
+        "j-c6de0fb2"
+      ]
+    },
+    {
+      "id": "79d06c3a",
+      "loreId": "79d06c3a",
+      "level": 0,
+      "decisionId": "inferred-bcce953a",
+      "intent": "Changes to tests/staleness.test.ts",
+      "summary": "Now **U4** — the non-persistence chokepoint. Stripping `stale` in `writeNote` so it can never reach a note, regardless of caller. Now a focused test for the strip. Let me add it to `tests/staleness.test.ts` since it's the staleness concern and writeNote round-trips through git notes:",
+      "files": [
+        "tests/staleness.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "3d0b30c4"
+      ],
+      "createdAt": "2026-06-03T16:39:57.929Z",
+      "sourceIds": [
+        "j-07a6586e",
+        "j-e86e5066"
+      ]
+    }
+  ]
+}
