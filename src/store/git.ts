@@ -120,8 +120,12 @@ export function commitDate(sha: string, cwd: string): string {
  * stale; that only happens before the first commit, which has no notes anyway).
  */
 export function filesAtHead(cwd: string): Set<string> {
-  const out = git(["ls-tree", "-r", "--name-only", "HEAD"], { cwd, allowFail: true });
-  return new Set(out ? out.split("\n").map((s) => s.trim()).filter(Boolean) : []);
+  // -z gives NUL-separated, verbatim paths — this disables core.quotepath's
+  // C-quoting of non-ASCII names, so the output matches the raw UTF-8 form that
+  // repoRelativePath stores in atom.files (otherwise "café.ts" would never match
+  // git's "caf\303\251.ts" and live files would read as stale).
+  const out = git(["ls-tree", "-r", "-z", "--name-only", "HEAD"], { cwd, allowFail: true });
+  return new Set(out ? out.split("\0").filter(Boolean) : []);
 }
 
 /** Commits (newest first) that touched a file, following renames. */

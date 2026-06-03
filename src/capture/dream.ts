@@ -1,5 +1,5 @@
 import type { Atom, Complete } from "../engine/index.js";
-import { compactGraph, atomTokens, isRollupAtom, isStale } from "../engine/index.js";
+import { compactGraph, atomTokens, isRollupAtom } from "../engine/index.js";
 import {
   repoRoot,
   graphAnchor,
@@ -7,7 +7,7 @@ import {
   readNote,
   writeNote,
   removeNote,
-  filesAtHead,
+  annotateStale,
   type NotePayload,
 } from "../store/index.js";
 import { STORE_TOKEN_BUDGET } from "../config.js";
@@ -58,16 +58,17 @@ export async function consolidateGraph(
 
   const entries = readAllAtoms(root); // { atom, commit }[]
   const allAtoms = entries.map((e) => e.atom);
-  // Mark atoms whose code is gone from HEAD so compactGraph folds them into
-  // rollups before live reasoning. The flag is stripped again by writeNote, so
-  // it never persists (it would be wrong the moment HEAD moves).
-  const live = filesAtHead(root);
-  for (const atom of allAtoms) atom.stale = isStale(atom, live);
   const before = allAtoms.length;
   const totalTokens = allAtoms.reduce((sum, a) => sum + atomTokens(a), 0);
   if (totalTokens <= budget) {
     return { ok: true, reason: "within-budget", before, after: before, rollups: 0, prunedCommits: 0 };
   }
+
+  // Mark atoms whose code is gone from HEAD so compactGraph folds them into
+  // rollups before live reasoning. Done only when we're actually compacting, and
+  // stripped again by writeNote so it never persists (it would be wrong the
+  // moment HEAD moves).
+  annotateStale(allAtoms, root);
 
   const compacted = await compactGraph(allAtoms, complete, { tokenBudget: budget });
   const keptIds = new Set(compacted.map((a) => a.loreId));

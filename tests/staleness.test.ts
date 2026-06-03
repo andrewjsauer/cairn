@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { isStale, type DecisionAtom, type RollupAtom } from "../src/engine/index.js";
-import { filesAtHead, writeNote, readNote } from "../src/store/index.js";
+import { filesAtHead, annotateStale, writeNote, readNote } from "../src/store/index.js";
 
 /**
  * Structural staleness: the pure rule (engine, no git) plus the HEAD snapshot
@@ -113,6 +113,29 @@ test("filesAtHead: empty repo with no HEAD -> empty set, no throw", () => {
   const repo = makeRepo();
   const live = filesAtHead(repo);
   assert.equal(live.size, 0);
+  rmSync(repo, { recursive: true, force: true });
+});
+
+test("filesAtHead: non-ASCII path matches verbatim (no core.quotepath C-quoting)", () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, "café.ts"), "1\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+
+  const live = filesAtHead(repo);
+  assert.equal(live.has("café.ts"), true, "raw UTF-8 name present, not C-quoted");
+  // and an atom about that still-present file is NOT stale
+  assert.equal(isStale(decisionAtom(["café.ts"]), live), false);
+  rmSync(repo, { recursive: true, force: true });
+});
+
+test("annotateStale: empty live set (no HEAD / git failure) annotates nothing", () => {
+  const repo = makeRepo(); // no commits -> no HEAD -> filesAtHead is empty
+  const atom = decisionAtom(["anything.ts"]);
+  annotateStale([atom], repo);
+  // Conservative: with no live snapshot we do NOT flag — absence of evidence is
+  // not evidence of deletion (guards against transient git failure flagging all).
+  assert.equal(atom.stale, undefined);
   rmSync(repo, { recursive: true, force: true });
 });
 
