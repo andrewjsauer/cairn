@@ -1,0 +1,95 @@
+{
+  "v": 1,
+  "commit": "3e8795d2db324b6361de97f4d130a6aad554edbe",
+  "generatedAt": "2026-06-03T16:45:51.336Z",
+  "loreId": "e61f111b",
+  "atoms": [
+    {
+      "id": "04d5757a",
+      "loreId": "04d5757a",
+      "level": 0,
+      "decisionId": "inferred-e241d196",
+      "intent": "Changes to src/engine/compact.ts",
+      "summary": "Now **U3**. First the engine — bias `compactGraph`'s keep/overflow so live atoms claim budget before stale ones.",
+      "files": [
+        "src/engine/compact.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "f0f6b6ca"
+      ],
+      "createdAt": "2026-06-03T16:43:14.717Z",
+      "sourceIds": [
+        "j-d7619c64"
+      ]
+    },
+    {
+      "id": "a12ff6ad",
+      "loreId": "a12ff6ad",
+      "level": 0,
+      "decisionId": "inferred-98367551",
+      "intent": "Changes to src/capture/dream.ts",
+      "summary": "Now **U3**. First the engine — bias `compactGraph`'s keep/overflow so live atoms claim budget before stale ones. Now annotate staleness on the dream's write path:",
+      "files": [
+        "src/capture/dream.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "a642260e"
+      ],
+      "createdAt": "2026-06-03T16:43:25.571Z",
+      "sourceIds": [
+        "j-5859f880",
+        "j-5dee0a8a"
+      ]
+    },
+    {
+      "id": "c7b67612",
+      "loreId": "c7b67612",
+      "level": 0,
+      "decisionId": "inferred-0b2999eb",
+      "intent": "Changes to tests/engine.test.ts",
+      "summary": "Now the tests. First a precise engine-level test of the eviction bias (pure, deterministic). Let me check the atom-building helpers in `engine.test.ts`.",
+      "files": [
+        "tests/engine.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "4f43d380",
+        "ea8d1db9"
+      ],
+      "createdAt": "2026-06-03T16:43:51.134Z",
+      "sourceIds": [
+        "j-8cb8eff7"
+      ]
+    },
+    {
+      "id": "7dda1dc0",
+      "loreId": "7dda1dc0",
+      "level": 0,
+      "decisionId": "inferred-de580660",
+      "intent": "Changes to tests/dream.test.ts",
+      "summary": "Now an end-to-end dream test wiring `dream.ts`'s annotation. Let me read the rest of `dream.test.ts`.",
+      "files": [
+        "tests/dream.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "8d641084"
+      ],
+      "createdAt": "2026-06-03T16:44:26.806Z",
+      "sourceIds": [
+        "j-48246f97",
+        "j-9df2f3e8"
+      ]
+    }
+  ]
+}
