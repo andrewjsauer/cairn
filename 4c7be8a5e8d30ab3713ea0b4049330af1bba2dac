@@ -1,0 +1,70 @@
+{
+  "v": 1,
+  "commit": "4c7be8a5e8d30ab3713ea0b4049330af1bba2dac",
+  "generatedAt": "2026-06-03T16:42:25.788Z",
+  "loreId": "64531af3",
+  "atoms": [
+    {
+      "id": "900ea81a",
+      "loreId": "900ea81a",
+      "level": 0,
+      "decisionId": "inferred-6696ad56",
+      "intent": "Changes to src/mcp/graph.ts",
+      "summary": "U4 green. Committing. Now **U2** — annotate in `graph.ts`, render in `format.ts`.",
+      "files": [
+        "src/mcp/graph.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:40:35.872Z",
+      "sourceIds": [
+        "j-5381028f",
+        "j-b9ab737e",
+        "j-f6652df2"
+      ]
+    },
+    {
+      "id": "7de20f62",
+      "loreId": "7de20f62",
+      "level": 0,
+      "decisionId": "inferred-c0527b11",
+      "intent": "Changes to src/mcp/format.ts",
+      "summary": "Now render the marker in `format.ts`:",
+      "files": [
+        "src/mcp/format.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:40:58.058Z",
+      "sourceIds": [
+        "j-3812803a",
+        "j-e067ec19"
+      ]
+    },
+    {
+      "id": "3f0e85f0",
+      "loreId": "3f0e85f0",
+      "level": 0,
+      "decisionId": "inferred-b870da6e",
+      "intent": "Changes to tests/integration.test.ts",
+      "summary": "Now an integration test for U2 — the read path end-to-end: build a real graph, delete a file, confirm `why`/`recent` flag-but-preserve-order. Let me check the integration test helpers. Now I'll append the U2 staleness integration test: I need to import `formatChain`. Let me add it to the imports:",
+      "files": [
+        "tests/integration.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:42:03.338Z",
+      "sourceIds": [
+        "j-09f36a8b",
+        "j-68543be1",
+        "j-828ef2d6"
+      ]
+    }
+  ]
+}
