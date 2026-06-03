@@ -1,0 +1,29 @@
+{
+  "v": 1,
+  "commit": "c99eb71f193fdfce3e322a52a126a8604d8f429f",
+  "generatedAt": "2026-06-03T19:46:06.895Z",
+  "loreId": "1b2c4d31",
+  "atoms": [
+    {
+      "id": "e54ca7cb",
+      "loreId": "e54ca7cb",
+      "level": 0,
+      "decisionId": "inferred-92b66381",
+      "intent": "Changes to .github/workflows/ci.yml",
+      "summary": "## Shipped ✅\n\n**`3b2133c` on main** (andrewjsauer/cairn) — CI green, zero fix cycles. Both deferred items from the staleness plan are now closed.\n\n### The full arc of today\n\n1. **Mem0 article analysis** → one adaptable idea (Copilot-style citation verification), two doc reframes, firm \"no\" to the embeddings pitch\n2. **Brainstorm** → structural-only staleness; semantic re-validation rejected as `supersedes`' job\n3. **Plan** → 4 units, all traceable to the requirements doc\n4. **Staleness shipped** (`d7dfc4a`) — flag, honest surfacing, dream eviction bias, non-persistence chokepoint\n5. **Rename r…",
+      "files": [
+        ".github/workflows/ci.yml"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "8ad67e0e"
+      ],
+      "createdAt": "2026-06-03T19:45:56.320Z",
+      "sourceIds": [
+        "j-fb4d590e"
+      ]
+    }
+  ]
+}
