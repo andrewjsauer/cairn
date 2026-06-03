@@ -111,6 +111,19 @@ export function commitDate(sha: string, cwd: string): string {
   return git(["show", "-s", "--format=%aI", sha], { cwd, allowFail: true });
 }
 
+/**
+ * The set of repo-relative paths tracked at HEAD. One git call; staleness is
+ * then pure set membership (an atom is stale when none of its files are here).
+ * Returns an empty set for an empty repo / no HEAD — callers must treat "no
+ * HEAD" as "nothing live", not "everything stale" (the engine's isStale already
+ * leaves files-less atoms alone, but a real atom in a HEAD-less repo will read
+ * stale; that only happens before the first commit, which has no notes anyway).
+ */
+export function filesAtHead(cwd: string): Set<string> {
+  const out = git(["ls-tree", "-r", "--name-only", "HEAD"], { cwd, allowFail: true });
+  return new Set(out ? out.split("\n").map((s) => s.trim()).filter(Boolean) : []);
+}
+
 /** Commits (newest first) that touched a file, following renames. */
 export function commitsTouchingFile(file: string, cwd: string): string[] {
   const out = git(["log", "--follow", "--format=%H", "--", file], {

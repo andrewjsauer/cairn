@@ -59,6 +59,13 @@ export interface DecisionAtom {
   createdAt: string;
   /** RawObservation ids that produced this atom. Provenance. */
   sourceIds: string[];
+  /**
+   * Derived, NOT persisted. Set at read-assembly time when all of this atom's
+   * `files` are absent from HEAD (the code it describes is gone). The engine
+   * only reads this flag; the git-aware layers compute it. `writeNote` strips it
+   * before serialization, so it never lands in the notes graph. See DESIGN.md.
+   */
+  stale?: boolean;
 }
 
 /** Level-1 atom: a rollup of several level-0 atoms, for budget compaction. */
@@ -72,6 +79,8 @@ export interface RollupAtom {
   /** loreIds of the level-0 atoms this rollup covers. Provenance so deeper levels
    *  can be reconstructed later without migration. */
   sourceIds: string[];
+  /** Derived, NOT persisted — see {@link DecisionAtom.stale}. */
+  stale?: boolean;
 }
 
 export type Atom = DecisionAtom | RollupAtom;
