@@ -177,6 +177,43 @@ test("compactGraph bounds the whole store at one rollup level with flattened pro
   assert.ok(covered2.has("a0"), "provenance still references original ids, not the intermediate rollup");
 });
 
+test("compactGraph folds STALE atoms before live ones of similar age", async () => {
+  // Two atoms on different files, same size; budget fits exactly one verbatim.
+  // The STALE one is NEWER — under pure recency it would be kept; the bias must
+  // fold it instead and keep the live (older) one verbatim.
+  const liveOld = mkAtom({
+    id: "live", loreId: "live", files: ["live.ts"],
+    summary: "reasoning ".repeat(20), createdAt: "2026-05-10T00:00:00.000Z",
+  });
+  const staleNew = mkAtom({
+    id: "stale", loreId: "stale", files: ["gone.ts"], stale: true,
+    summary: "reasoning ".repeat(20), createdAt: "2026-05-20T00:00:00.000Z",
+  });
+  const budget = atomTokens(liveOld) + 1; // room for ~one verbatim
+
+  const out = await compactGraph([liveOld, staleNew], fakeComplete({ rollup: "folded" }), { tokenBudget: budget });
+
+  assert.ok(out.some((a) => a.level === 0 && a.id === "live"), "live atom kept verbatim");
+  assert.ok(!out.some((a) => a.level === 0 && a.id === "stale"), "stale atom not kept verbatim");
+  const covered = new Set(out.filter(isRollupAtom).flatMap((r) => r.sourceIds));
+  assert.ok(covered.has("stale"), "stale atom folded into a rollup (provenance preserved)");
+});
+
+test("compactGraph with no stale atoms is unchanged recency behavior", async () => {
+  // All live: newest survives, oldest folds — exactly as before the bias existed.
+  const atoms = Array.from({ length: 4 }, (_, i) =>
+    mkAtom({
+      id: `a${i}`, loreId: `a${i}`, files: ["src/x.ts"],
+      summary: `reasoning ${i} `.repeat(20), createdAt: `2026-05-${10 + i}T00:00:00.000Z`,
+    })
+  );
+  const budget = atomTokens(atoms[0]) * 2;
+  const out = await compactGraph(atoms, fakeComplete({ rollup: "arc" }), { tokenBudget: budget });
+  assert.ok(out.some((a) => a.level === 0 && a.id === "a3"), "newest kept verbatim");
+  const covered = new Set(out.filter(isRollupAtom).flatMap((r) => r.sourceIds));
+  assert.ok(covered.has("a0"), "oldest folded");
+});
+
 test("fiveDimensionOverlap scores identical decisions high, unrelated low", () => {
   const a = mkAtom({ files: ["src/a.ts"], intent: "make retries safe with backoff" });
   const same = mkAtom({ files: ["src/a.ts"], intent: "make retries safe with backoff" });

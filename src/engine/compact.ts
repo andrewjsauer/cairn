@@ -80,20 +80,29 @@ export async function compactGraph(
   const total = atoms.reduce((sum, a) => sum + atomTokens(a), 0);
   if (total <= opts.tokenBudget) return atoms; // already bounded
 
-  const level0 = atoms.filter(isDecisionAtom).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const level0 = atoms.filter(isDecisionAtom);
   const existingRollups = atoms.filter(isRollupAtom);
 
-  // Keep newest level-0 atoms that fit; the rest overflow into the compress set.
+  // Keep level-0 atoms that fit, but bias eviction toward STALE atoms — the ones
+  // whose code is gone from HEAD. Live atoms claim budget first (newest verbatim),
+  // stale atoms only if room remains, so dead-code reasoning compresses out of the
+  // hot set ahead of live reasoning of similar age. With no atoms stale this is
+  // exactly the old behavior (newest-first greedy keep).
+  const candidates = [...level0].sort((a, b) => {
+    const staleRank = (a.stale ? 1 : 0) - (b.stale ? 1 : 0);
+    if (staleRank !== 0) return staleRank; // live (0) before stale (1)
+    return b.createdAt.localeCompare(a.createdAt); // newer before older
+  });
   const keep: Atom[] = [];
   const overflow: Atom[] = [];
   let used = 0;
-  for (let i = level0.length - 1; i >= 0; i--) {
-    const cost = atomTokens(level0[i]);
+  for (const atom of candidates) {
+    const cost = atomTokens(atom);
     if (used + cost <= opts.tokenBudget) {
-      keep.push(level0[i]);
+      keep.push(atom);
       used += cost;
     } else {
-      overflow.push(level0[i]);
+      overflow.push(atom);
     }
   }
 

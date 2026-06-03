@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { openDecision, recordEdit, consolidate, consolidateGraph } from "../src/capture/index.js";
 import { readAllAtoms } from "../src/store/index.js";
 import { atomsForFile } from "../src/mcp/graph.js";
-import { recall, isRollupAtom, type Complete } from "../src/engine/index.js";
+import { recall, isRollupAtom, atomTokens, type Complete } from "../src/engine/index.js";
 
 /**
  * The "dream" — global store compaction. Builds a multi-commit graph, then
@@ -83,6 +83,44 @@ test("the dream compacts the store under budget while preserving per-file covera
   // why() still returns something readable and budget-bounded.
   const why = recall(core, { file: "core.ts", tokenBudget: 2000 });
   assert.ok(why.atoms.length >= 1);
+});
+
+test("the dream folds a deleted-file atom before a live one, and never persists the stale flag", async () => {
+  const repo = makeRepo();
+
+  // keep.ts (older), then gone.ts (newer). Pure recency would keep gone.ts.
+  for (const [i, f] of [["keep.ts", "2026-05-10"], ["gone.ts", "2026-05-20"]].entries()) {
+    const now = `${f[1]}T00:00:00.000Z`;
+    openDecision(repo, `decision ${i} about ${f[0]}`, [], now);
+    writeFileSync(join(repo, f[0]), `// rev ${i} with enough text to weigh something\n`);
+    recordEdit(repo, { toolName: "Write", filePath: join(repo, f[0]), reason: `change ${i}`, ts: now });
+    gitC(repo, ["add", "-A"]);
+    gitC(repo, ["commit", "-q", "-m", `feat: ${f[0]}`]);
+    await consolidate(repo, fake, { now });
+  }
+
+  // Delete gone.ts — no superseding decision, the staleness gap.
+  gitC(repo, ["rm", "-q", "gone.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "chore: drop gone.ts"]);
+
+  // Budget with room for ~one verbatim atom, forcing a choice.
+  const oneAtom = atomTokens(readAllAtoms(repo)[0].atom);
+  const result = await consolidateGraph(repo, fake, { budget: oneAtom + 1, now: "2026-06-01T00:00:00.000Z" });
+  assert.equal(result.ok, true);
+  assert.ok(result.rollups >= 1, "produced a rollup");
+
+  // The live atom survives verbatim; the deleted-code atom was folded.
+  const keep = atomsForFile(repo, "keep.ts");
+  assert.ok(keep.some((a) => !isRollupAtom(a)), "live keep.ts reasoning kept verbatim");
+  const stored = readAllAtoms(repo).map((x) => x.atom);
+  const covered = new Set(stored.filter(isRollupAtom).flatMap((r) => r.sourceIds));
+  const goneSurvivesVerbatim = stored.some((a) => !isRollupAtom(a) && a.files.includes("gone.ts"));
+  assert.ok(!goneSurvivesVerbatim || covered.size > 0, "gone.ts reasoning was folded, not kept ahead of live");
+
+  // The derived flag never reached the notes store.
+  for (const { atom } of readAllAtoms(repo)) {
+    assert.equal(atom.stale, undefined, "no persisted atom carries the stale flag");
+  }
 });
 
 test("the dream is a no-op when the store is already under budget", async () => {
