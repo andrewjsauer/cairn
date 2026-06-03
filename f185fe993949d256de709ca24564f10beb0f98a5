@@ -1,0 +1,146 @@
+{
+  "v": 1,
+  "commit": "f185fe993949d256de709ca24564f10beb0f98a5",
+  "generatedAt": "2026-06-03T16:39:21.993Z",
+  "loreId": "2dabb96c",
+  "atoms": [
+    {
+      "id": "84630807",
+      "loreId": "84630807",
+      "level": 0,
+      "decisionId": "inferred-f19b6a11",
+      "intent": "Changes to docs/brainstorms/2026-06-03-atom-staleness-requirements.md",
+      "summary": "I'll write the requirements doc.",
+      "files": [
+        "docs/brainstorms/2026-06-03-atom-staleness-requirements.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T15:32:26.987Z",
+      "sourceIds": [
+        "j-02cb5823"
+      ]
+    },
+    {
+      "id": "c527042d",
+      "loreId": "c527042d",
+      "level": 0,
+      "decisionId": "inferred-6bc97bfe",
+      "intent": "Changes to docs/plans/2026-06-03-001-feat-atom-staleness-plan.md",
+      "summary": "I'll write the plan.",
+      "files": [
+        "docs/plans/2026-06-03-001-feat-atom-staleness-plan.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:32:13.858Z",
+      "sourceIds": [
+        "j-080f78b7"
+      ]
+    },
+    {
+      "id": "a628b30f",
+      "loreId": "a628b30f",
+      "level": 0,
+      "decisionId": "inferred-fe893b61",
+      "intent": "Changes to src/engine/types.ts",
+      "summary": "Now implementing U1.",
+      "files": [
+        "src/engine/types.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:38:17.369Z",
+      "sourceIds": [
+        "j-9dbfa926",
+        "j-e4737f70"
+      ]
+    },
+    {
+      "id": "5cd7f20b",
+      "loreId": "5cd7f20b",
+      "level": 0,
+      "decisionId": "inferred-d8967df1",
+      "intent": "Changes to src/engine/staleness.ts",
+      "summary": "Now implementing U1.",
+      "files": [
+        "src/engine/staleness.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:38:25.151Z",
+      "sourceIds": [
+        "j-7d7a9456"
+      ]
+    },
+    {
+      "id": "e56ba28b",
+      "loreId": "e56ba28b",
+      "level": 0,
+      "decisionId": "inferred-6437aa27",
+      "intent": "Changes to src/engine/index.ts",
+      "summary": "Now the pure staleness rule:",
+      "files": [
+        "src/engine/index.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "489f7302"
+      ],
+      "createdAt": "2026-06-03T16:38:28.591Z",
+      "sourceIds": [
+        "j-ef43a2ae"
+      ]
+    },
+    {
+      "id": "0d331561",
+      "loreId": "0d331561",
+      "level": 0,
+      "decisionId": "inferred-b5750358",
+      "intent": "Changes to src/store/git.ts",
+      "summary": "Now `filesAtHead` in the store git layer. Let me read the top of git.ts for the `git()` helper signature:",
+      "files": [
+        "src/store/git.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "fce7b0ed"
+      ],
+      "createdAt": "2026-06-03T16:38:39.692Z",
+      "sourceIds": [
+        "j-0136976d"
+      ]
+    },
+    {
+      "id": "3d0b30c4",
+      "loreId": "3d0b30c4",
+      "level": 0,
+      "decisionId": "inferred-a93f3ecc",
+      "intent": "Changes to tests/staleness.test.ts",
+      "summary": "`filesAtHead` is exported via the store barrel's `export *`. Now the U1 tests. Let me check existing test conventions.",
+      "files": [
+        "tests/staleness.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T16:39:06.002Z",
+      "sourceIds": [
+        "j-2df05797"
+      ]
+    }
+  ]
+}
