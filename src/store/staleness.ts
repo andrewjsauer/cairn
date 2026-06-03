@@ -1,6 +1,6 @@
 import type { Atom } from "../engine/types.js";
 import { isStale } from "../engine/staleness.js";
-import { filesAtHead } from "./git.js";
+import { filesAtHead, renamesInHistory } from "./git.js";
 
 /**
  * Mark each atom stale when the code it describes is gone from HEAD — one git
@@ -16,9 +16,34 @@ import { filesAtHead } from "./git.js";
  * tracked files is the only false negative, and it has no live code to reason
  * about anyway.)
  */
-export function annotateStale(atoms: Atom[], cwd: string): Atom[] {
+export function annotateStale(
+  atoms: Atom[],
+  cwd: string,
+  renames?: Map<string, string>
+): Atom[] {
   const live = filesAtHead(cwd);
   if (live.size === 0) return atoms;
+
+  // A caller that already paid for the rename map (atomsForFile uses it for
+  // canonical-name matching) passes it in; one pass with rescue built in.
+  if (renames) {
+    for (const atom of atoms) atom.stale = isStale(atom, live, renames);
+    return atoms;
+  }
+
   for (const atom of atoms) atom.stale = isStale(atom, live);
+
+  // Rename rescue, fetched lazily: a renamed file is not deleted — its content
+  // lives on at the new path, so the reasoning about it is still current. The
+  // rename map costs a full-history git call, so only pay for it when the cheap
+  // pass actually flagged something (the all-live common case never does).
+  if (atoms.some((a) => a.stale)) {
+    const lazyRenames = renamesInHistory(cwd);
+    if (lazyRenames.size > 0) {
+      for (const atom of atoms) {
+        if (atom.stale) atom.stale = isStale(atom, live, lazyRenames);
+      }
+    }
+  }
   return atoms;
 }

@@ -110,6 +110,13 @@ export interface RecallQuery {
   recent?: number;
   /** Hard token ceiling for the result. */
   tokenBudget: number;
+  /**
+   * Optional old-path -> new-path rename map (plain data, derived from git by
+   * the caller). When present, the chain query matches files by canonical
+   * current name, so a chain recorded under a renamed file's old path is still
+   * found. Without it, matching is exact path equality.
+   */
+  renames?: Map<string, string>;
 }
 
 export interface RecallResult {

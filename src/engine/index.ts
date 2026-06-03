@@ -10,7 +10,7 @@ export * from "./types.js";
 export { ingest } from "./ingest.js";
 export { compact, compactGraph } from "./compact.js";
 export { recall } from "./recall.js";
-export { isStale } from "./staleness.js";
+export { isStale, resolveRename } from "./staleness.js";
 export { fiveDimensionOverlap, SAME_DECISION_THRESHOLD } from "./overlap.js";
 export type { OverlapBreakdown } from "./overlap.js";
 export { estimateTokens, atomTokens, renderAtom } from "./budget.js";

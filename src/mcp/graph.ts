@@ -1,4 +1,5 @@
 import type { Atom, DecisionAtom } from "../engine/index.js";
+import { resolveRename } from "../engine/index.js";
 import {
   readAllAtoms,
   listNotes,
@@ -7,6 +8,7 @@ import {
   commitSubject,
   commitDate,
   filesChanged,
+  renamesInHistory,
   annotateStale,
   type LoreRecord,
 } from "../store/index.js";
@@ -27,10 +29,20 @@ export function allAtoms(cwd: string): Atom[] {
   return annotateStale(dedupe(readAllAtoms(cwd).map((x) => x.atom)), cwd);
 }
 
-export function atomsForFile(cwd: string, file: string): Atom[] {
+export function atomsForFile(
+  cwd: string,
+  file: string,
+  renames: Map<string, string> = renamesInHistory(cwd)
+): Atom[] {
+  // Match by canonical CURRENT name, so a chain recorded under a file's old
+  // path is still found when queried by its renamed path (and vice versa).
+  // With no renames in history this degrades to exact path equality. The caller
+  // may pass a precomputed map to share the git call with its own recall query.
+  const canonical = (p: string) => resolveRename(p, renames);
+  const target = canonical(file);
   const fromNotes = readAllAtoms(cwd)
     .map((x) => x.atom)
-    .filter((a) => a.files.includes(file));
+    .filter((a) => a.files.some((f) => canonical(f) === target));
 
   // Commits Cairn already noted carry their reasoning in the (richer) note; only
   // read trailers for commits WITHOUT a Cairn note — i.e. Lore records written
@@ -43,7 +55,7 @@ export function atomsForFile(cwd: string, file: string): Atom[] {
     if (record) fromTrailers.push(trailerToAtom(record, sha, cwd));
   }
 
-  return annotateStale(dedupe([...fromNotes, ...fromTrailers]), cwd);
+  return annotateStale(dedupe([...fromNotes, ...fromTrailers]), cwd, renames);
 }
 
 /** Keep one atom per Lore-id (the newest), so a note atom and its own commit

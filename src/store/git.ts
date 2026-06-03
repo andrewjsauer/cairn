@@ -128,6 +128,34 @@ export function filesAtHead(cwd: string): Set<string> {
   return new Set(out ? out.split("\0").filter(Boolean) : []);
 }
 
+/**
+ * Every rename in history as an old-path -> new-path map, newest rename winning
+ * per old path. One git call (`log --diff-filter=R --name-status`); -z gives
+ * verbatim NUL-separated `R<score> old new` triples (no core.quotepath quoting),
+ * -M forces rename detection even if the user disabled diff.renames. Used to
+ * rescue renamed-but-live files from a false structural-staleness flag — fetched
+ * lazily, only when some atom already looks stale.
+ */
+export function renamesInHistory(cwd: string): Map<string, string> {
+  const out = git(["log", "-M", "--diff-filter=R", "--name-status", "-z", "--format="], {
+    cwd,
+    allowFail: true,
+  });
+  const renames = new Map<string, string>();
+  const tokens = out ? out.split("\0").filter(Boolean) : [];
+  for (let i = 0; i + 2 < tokens.length; ) {
+    if (!/^R\d+$/.test(tokens[i])) {
+      i++;
+      continue;
+    }
+    const [oldPath, newPath] = [tokens[i + 1], tokens[i + 2]];
+    // Output is newest-first; keep the newest rename for each old path.
+    if (!renames.has(oldPath)) renames.set(oldPath, newPath);
+    i += 3;
+  }
+  return renames;
+}
+
 /** Commits (newest first) that touched a file, following renames. */
 export function commitsTouchingFile(file: string, cwd: string): string[] {
   const out = git(["log", "--follow", "--format=%H", "--", file], {

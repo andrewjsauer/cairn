@@ -1,5 +1,6 @@
 import type { Atom, RecallQuery, RecallResult } from "./types.js";
 import { atomTokens } from "./budget.js";
+import { resolveRename } from "./staleness.js";
 
 /**
  * Budget-bounded recall.
@@ -16,8 +17,12 @@ import { atomTokens } from "./budget.js";
  * unbounded dump that grows with the repo.
  */
 
-function touchesFile(atom: Atom, file: string): boolean {
-  return atom.files.includes(file);
+/** Match by canonical current name when a rename map is supplied, so a chain
+ *  recorded under a file's old path still answers a query by its new path. */
+function touchesFile(atom: Atom, file: string, renames?: Map<string, string>): boolean {
+  if (!renames) return atom.files.includes(file);
+  const target = resolveRename(file, renames);
+  return atom.files.some((f) => resolveRename(f, renames) === target);
 }
 
 function byCreatedAsc(a: Atom, b: Atom): number {
@@ -26,7 +31,7 @@ function byCreatedAsc(a: Atom, b: Atom): number {
 
 export function recall(atoms: Atom[], query: RecallQuery): RecallResult {
   if (query.file !== undefined) {
-    return recallChain(atoms, query.file, query.tokenBudget);
+    return recallChain(atoms, query.file, query.tokenBudget, query.renames);
   }
   if (query.recent !== undefined) {
     return recallRecent(atoms, query.recent, query.tokenBudget);
@@ -38,9 +43,10 @@ export function recall(atoms: Atom[], query: RecallQuery): RecallResult {
 function recallChain(
   atoms: Atom[],
   file: string,
-  budget: number
+  budget: number,
+  renames?: Map<string, string>
 ): RecallResult {
-  const chain = atoms.filter((a) => touchesFile(a, file)).sort(byCreatedAsc);
+  const chain = atoms.filter((a) => touchesFile(a, file, renames)).sort(byCreatedAsc);
 
   // Walk newest -> oldest accumulating cost; keep whatever fits, then re-sort
   // chronologically for presentation. Rollups are cheap and cover old history,

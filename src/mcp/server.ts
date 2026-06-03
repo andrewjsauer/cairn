@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { recall } from "../engine/index.js";
-import { repoRoot, repoRelativePath } from "../store/index.js";
+import { repoRoot, repoRelativePath, renamesInHistory } from "../store/index.js";
 import { allAtoms, atomsForFile } from "./graph.js";
 import { formatChain, formatRecent } from "./format.js";
 import { RECALL_TOKEN_BUDGET, DEFAULT_RECENT } from "../config.js";
@@ -53,8 +53,11 @@ server.registerTool(
     const root = resolveRepoRoot();
     if (!root) return errorResult("Cairn: not inside a git repository.");
     const rel = repoRelativePath(root, file);
-    const atoms = atomsForFile(root, rel);
-    const result = recall(atoms, { file: rel, tokenBudget: RECALL_TOKEN_BUDGET });
+    // One rename map per request, shared by assembly and recall so both match
+    // a renamed file's chain by its canonical current name.
+    const renames = renamesInHistory(root);
+    const atoms = atomsForFile(root, rel, renames);
+    const result = recall(atoms, { file: rel, tokenBudget: RECALL_TOKEN_BUDGET, renames });
     return textResult(formatChain(rel, result));
   }
 );

@@ -5,8 +5,8 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { isStale, type DecisionAtom, type RollupAtom } from "../src/engine/index.js";
-import { filesAtHead, annotateStale, writeNote, readNote } from "../src/store/index.js";
+import { isStale, resolveRename, type DecisionAtom, type RollupAtom } from "../src/engine/index.js";
+import { filesAtHead, renamesInHistory, annotateStale, writeNote, readNote } from "../src/store/index.js";
 
 /**
  * Structural staleness: the pure rule (engine, no git) plus the HEAD snapshot
@@ -126,6 +126,77 @@ test("filesAtHead: non-ASCII path matches verbatim (no core.quotepath C-quoting)
   assert.equal(live.has("café.ts"), true, "raw UTF-8 name present, not C-quoted");
   // and an atom about that still-present file is NOT stale
   assert.equal(isStale(decisionAtom(["café.ts"]), live), false);
+  rmSync(repo, { recursive: true, force: true });
+});
+
+// --- rename resolution -------------------------------------------------------
+
+test("resolveRename: follows a chain to the current name", () => {
+  const renames = new Map([["a.ts", "b.ts"], ["b.ts", "c.ts"]]);
+  assert.equal(resolveRename("a.ts", renames), "c.ts");
+  assert.equal(resolveRename("b.ts", renames), "c.ts");
+  assert.equal(resolveRename("untouched.ts", renames), "untouched.ts");
+  assert.equal(resolveRename("a.ts", undefined), "a.ts");
+});
+
+test("resolveRename: a rename cycle terminates instead of looping", () => {
+  const renames = new Map([["a.ts", "b.ts"], ["b.ts", "a.ts"]]);
+  assert.equal(resolveRename("a.ts", renames), "b.ts");
+});
+
+test("isStale: a renamed-but-live file rescues the atom", () => {
+  const live = new Set(["c.ts"]);
+  const renames = new Map([["a.ts", "b.ts"], ["b.ts", "c.ts"]]);
+  assert.equal(isStale(decisionAtom(["a.ts"]), live, renames), false, "renamed, not deleted");
+  assert.equal(isStale(decisionAtom(["gone.ts"]), live, renames), true, "truly deleted stays stale");
+});
+
+test("renamesInHistory: parses git mv history, newest rename wins per old path", () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, "a.ts"), "content\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  execFileSync("git", ["mv", "a.ts", "b.ts"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "a -> b"], { cwd: repo });
+  execFileSync("git", ["mv", "b.ts", "c.ts"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "b -> c"], { cwd: repo });
+
+  const renames = renamesInHistory(repo);
+  assert.equal(renames.get("a.ts"), "b.ts");
+  assert.equal(renames.get("b.ts"), "c.ts");
+  // the chain resolves to the live current name
+  assert.equal(resolveRename("a.ts", renames), "c.ts");
+  assert.equal(filesAtHead(repo).has("c.ts"), true);
+  rmSync(repo, { recursive: true, force: true });
+});
+
+test("renamesInHistory: empty for a repo with no renames (and no HEAD)", () => {
+  const repo = makeRepo();
+  assert.equal(renamesInHistory(repo).size, 0); // no HEAD
+  writeFileSync(join(repo, "a.ts"), "1\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  assert.equal(renamesInHistory(repo).size, 0); // history, no renames
+  rmSync(repo, { recursive: true, force: true });
+});
+
+test("annotateStale: rename rescue — renamed file not stale, deleted file stays stale", () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, "moved.ts"), "will move\n");
+  writeFileSync(join(repo, "dead.ts"), "will die\n");
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  execFileSync("git", ["mv", "moved.ts", "renamed.ts"], { cwd: repo });
+  execFileSync("git", ["rm", "-q", "dead.ts"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "move + delete"], { cwd: repo });
+
+  const movedAtom = decisionAtom(["moved.ts"]);
+  const deadAtom = decisionAtom(["dead.ts"]);
+  deadAtom.loreId = deadAtom.id = "a2";
+  annotateStale([movedAtom, deadAtom], repo);
+
+  assert.equal(movedAtom.stale, false, "renamed-but-live file is rescued");
+  assert.equal(deadAtom.stale, true, "deleted file is still stale");
   rmSync(repo, { recursive: true, force: true });
 });
 

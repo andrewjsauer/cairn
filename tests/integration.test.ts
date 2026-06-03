@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { openDecision, recordEdit, consolidate } from "../src/capture/index.js";
-import { readEntries } from "../src/store/index.js";
+import { readEntries, renamesInHistory } from "../src/store/index.js";
 import { atomsForFile, allAtoms } from "../src/mcp/graph.js";
 import { formatChain } from "../src/mcp/format.js";
 import { recall, type Complete } from "../src/engine/index.js";
@@ -181,6 +181,48 @@ test("U2: read path flags atoms whose code is gone, preserving order, dropping n
   assert.equal(whyKeep.atoms.length, 1);
   assert.equal(whyKeep.atoms[0].stale, false);
   assert.doesNotMatch(formatChain("keep.ts", whyKeep), /STALE/);
+});
+
+test("rename resolution: a renamed file's chain is found via --follow and NOT flagged stale", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-27T10:00:00.000Z";
+
+  openDecision(repo, "decision about moved.ts", [], now);
+  writeFileSync(join(repo, "moved.ts"), "// original\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "moved.ts"), reason: "create", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: moved.ts"]);
+  await consolidate(repo, fakeComplete, { now });
+
+  // Rename (not delete) — the reasoning is still about live code.
+  gitC(repo, ["mv", "moved.ts", "renamed.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "chore: rename moved.ts"]);
+
+  // recent(): the atom is rescued by the rename map — not stale.
+  const recent = recall(allAtoms(repo), { recent: 5, tokenBudget: 2000 });
+  assert.equal(recent.atoms.length, 1);
+  assert.equal(recent.atoms[0].stale, false, "renamed-but-live code is not stale");
+
+  // why(renamed.ts): canonical-name matching finds the chain recorded under
+  // the old path, and it is served unflagged. Mirrors the server: one rename
+  // map per request, shared by assembly and recall.
+  const renames = renamesInHistory(repo);
+  const why = recall(atomsForFile(repo, "renamed.ts", renames), {
+    file: "renamed.ts",
+    tokenBudget: 2000,
+    renames,
+  });
+  assert.ok(why.atoms.length >= 1, "chain found under the new name");
+  assert.ok(why.atoms.every((a) => !a.stale), "no false STALE tag on renamed code");
+
+  // Querying by the OLD path resolves to the same chain (both canonicalize
+  // to the current name).
+  const whyOld = recall(atomsForFile(repo, "moved.ts", renames), {
+    file: "moved.ts",
+    tokenBudget: 2000,
+    renames,
+  });
+  assert.ok(whyOld.atoms.length >= 1, "old-path query still resolves the chain");
 });
 
 // Keeps tsc/eslint from flagging the import in environments without it.
