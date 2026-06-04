@@ -1,8 +1,8 @@
 {
   "v": 1,
   "commit": "b326e62125f943b1fb81b9ceb1c025d1abcadd24",
-  "generatedAt": "2026-06-03T20:48:30.138Z",
-  "loreId": "ba6defaa",
+  "generatedAt": "2026-06-04T20:10:29.097Z",
+  "loreId": "6a069792",
   "atoms": [
     {
       "id": "9efa8ad1",
@@ -48,6 +48,44 @@
       "createdAt": "2026-06-03T20:48:21.025Z",
       "sourceIds": [
         "j-1cd12d9d"
+      ]
+    },
+    {
+      "id": "8b3e2b32",
+      "loreId": "8b3e2b32",
+      "level": 0,
+      "decisionId": "inferred-90bec5c5",
+      "intent": "Changes to docs/brainstorms/2026-06-03-revert-detection-requirements.md",
+      "summary": "Verified the three facts, and they sharpen everything:\n\n1. **A bare `git revert` produces no atom today.** The Bash hook fires `consolidate-if-commit`, but consolidation with an empty journal is a no-op (`empty-journal, written: 0`) — so an un-journaled revert is completely invisible to the chain. The revert event truly is uncaptured consequence.\n2. **`supersedes` is set deterministically** (overlap scoring at consolidation), so chain evolution already covers *reasoned* undos — when an agent undoes something *with capture active*, the new decision lands in the chain organically.\n3. **The stale…",
+      "files": [
+        "docs/brainstorms/2026-06-03-revert-detection-requirements.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-03T22:30:36.994Z",
+      "sourceIds": [
+        "j-bd3d12da"
+      ]
+    },
+    {
+      "id": "11580c64",
+      "loreId": "11580c64",
+      "level": 0,
+      "decisionId": "inferred-83ae1641",
+      "intent": "Changes to docs/plans/2026-06-04-001-feat-revert-detection-plan.md",
+      "summary": "Probe done — three facts the plan needs:\n\n1. Standard reverts carry the **full 40-char SHA** in the body; revert-of-revert keeps the same body shape (subject becomes `Reapply \"…\"`), so net-status resolves purely on the edge graph.\n2. The `--reference` variant uses an **abbreviated SHA** (`d6a8fff (subject, date)`), so the parser must accept 7–40 hex chars — and the same one log call that finds reverts also yields the full SHA universe (`%H`), so prefixes resolve by unique `startsWith` with **zero extra git calls**.\n3. `git log --format='%H%x00%B%x01'` gives clean `sha\\0body\\x01` records — one …",
+      "files": [
+        "docs/plans/2026-06-04-001-feat-revert-detection-plan.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-04T19:23:18.429Z",
+      "sourceIds": [
+        "j-48792a75"
       ]
     }
   ]
