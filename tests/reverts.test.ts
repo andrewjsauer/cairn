@@ -148,6 +148,20 @@ test("revertEdgesInHistory: multiple reverts in one body -> multiple edges", () 
   rmSync(repo, { recursive: true, force: true });
 });
 
+test("revertEdgesInHistory: a >40-char hex run is rejected, not truncated to a fake SHA", () => {
+  const repo = makeRepo();
+  // A pasted sha256 (64 hex chars) after the phrase must NOT yield an edge made
+  // of its first 40 chars — that would bypass the universe check ("never a
+  // wrong one").
+  const sha256 = "ab".repeat(32); // 64 hex chars
+  writeFileSync(join(repo, "f.ts"), "v\n");
+  gitC(repo, ["add", "."]);
+  gitC(repo, ["commit", "-q", "-m", `chore: x\n\nThis reverts commit ${sha256}.`]);
+
+  assert.equal(revertEdgesInHistory(repo).length, 0);
+  rmSync(repo, { recursive: true, force: true });
+});
+
 test("revertEdgesInHistory: no reverts / no HEAD -> empty, no throw", () => {
   const repo = makeRepo();
   assert.equal(revertEdgesInHistory(repo).length, 0); // no HEAD

@@ -193,7 +193,10 @@ export function revertEdgesInHistory(cwd: string): { reverter: string; reverted:
     if (!/^[0-9a-f]{40}$/.test(sha)) continue;
     universe.push(sha);
     const body = record.slice(sep + 1);
-    for (const m of body.matchAll(/This reverts commit ([0-9a-f]{7,40})/g)) {
+    // Trailing lookahead: a hex run LONGER than 40 chars (e.g. a pasted sha256)
+    // must not silently truncate to a "full SHA" that would bypass the universe
+    // check below — better no edge than a wrong one.
+    for (const m of body.matchAll(/This reverts commit ([0-9a-f]{7,40})(?![0-9a-f])/g)) {
       candidates.push({ reverter: sha, reverted: m[1] });
     }
   }
