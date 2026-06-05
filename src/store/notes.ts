@@ -26,13 +26,14 @@ export interface NotePayload {
 }
 
 export function writeNote(sha: string, payload: NotePayload, cwd: string): void {
-  // Strip derived fields before serializing. `stale` is computed at read/dream
-  // time from HEAD and must never persist (it would be wrong the moment HEAD
-  // moves). This is the single serialization chokepoint, so every caller — the
-  // dream, consolidation, any future writer — is protected here, once.
+  // Strip derived fields before serializing. `stale` and `reverted` are
+  // computed at read/dream time from HEAD/history and must never persist (they
+  // would be wrong the moment HEAD moves or a revert is itself reverted). This
+  // is the single serialization chokepoint, so every caller — the dream,
+  // consolidation, any future writer — is protected here, once.
   const persisted: NotePayload = {
     ...payload,
-    atoms: payload.atoms.map(({ stale, ...rest }) => rest),
+    atoms: payload.atoms.map(({ stale, reverted, ...rest }) => rest),
   };
   git(["notes", `--ref=${NOTES_REF}`, "add", "-f", "-F", "-", sha], {
     cwd,

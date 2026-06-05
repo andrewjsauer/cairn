@@ -232,7 +232,7 @@ test("annotateStale: empty live set (no HEAD / git failure) annotates nothing", 
 
 // --- U4: the derived flag never persists -----------------------------------
 
-test("writeNote strips the derived `stale` flag before serializing", () => {
+test("writeNote strips the derived `stale` and `reverted` flags before serializing", () => {
   const repo = makeRepo();
   execFileSync("git", ["commit", "-q", "--allow-empty", "-m", "root"], { cwd: repo });
   const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
@@ -242,16 +242,21 @@ test("writeNote strips the derived `stale` flag before serializing", () => {
   const dead = decisionAtom(["gone.ts"]);
   dead.loreId = dead.id = "a2";
   dead.stale = true;
+  dead.reverted = true;
 
   writeNote(sha, { v: 1, commit: sha, generatedAt: "2026-06-01T00:00:00.000Z", loreId: "x", atoms: [live, dead] }, repo);
 
-  // raw JSON carries no `stale` key at all, and parsed atoms are undefined-stale
+  // raw JSON carries neither derived key, and parsed atoms have them undefined
   const raw = execFileSync("git", ["notes", "--ref=cairn", "show", sha], { cwd: repo, encoding: "utf8" });
   assert.equal(raw.includes("\"stale\""), false);
+  assert.equal(raw.includes("\"reverted\""), false);
   const payload = readNote(sha, repo);
   assert.ok(payload);
-  for (const a of payload!.atoms) assert.equal(a.stale, undefined);
-  // the rest of the atom survived intact (only `stale` was dropped)
+  for (const a of payload!.atoms) {
+    assert.equal(a.stale, undefined);
+    assert.equal(a.reverted, undefined);
+  }
+  // the rest of the atom survived intact (only derived flags were dropped)
   assert.deepEqual(payload!.atoms.map((a) => a.loreId).sort(), ["a1", "a2"]);
   rmSync(repo, { recursive: true, force: true });
 });
