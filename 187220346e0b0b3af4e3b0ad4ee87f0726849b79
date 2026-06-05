@@ -1,0 +1,56 @@
+{
+  "v": 1,
+  "commit": "187220346e0b0b3af4e3b0ad4ee87f0726849b79",
+  "generatedAt": "2026-06-05T20:27:07.814Z",
+  "loreId": "c69c11ba",
+  "atoms": [
+    {
+      "id": "44a555b5",
+      "loreId": "44a555b5",
+      "level": 0,
+      "decisionId": "inferred-29d6643f",
+      "intent": "Changes to src/store/git.ts",
+      "summary": "Simplify committed. Now the Tier-1 correctness review — 3 finder angles on the updated diff:",
+      "files": [
+        "src/store/git.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "38930329",
+        "507fa351",
+        "85226637",
+        "5f63f53f",
+        "fce7b0ed",
+        "ced05abc",
+        "0d331561"
+      ],
+      "createdAt": "2026-06-05T20:25:17.438Z",
+      "sourceIds": [
+        "j-55a24ff6"
+      ]
+    },
+    {
+      "id": "4108b9ac",
+      "loreId": "4108b9ac",
+      "level": 0,
+      "decisionId": "inferred-af6a5767",
+      "intent": "Changes to tests/reverts.test.ts",
+      "summary": "Simplify committed. Now the Tier-1 correctness review — 3 finder angles on the updated diff:",
+      "files": [
+        "tests/reverts.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "96a2c022"
+      ],
+      "createdAt": "2026-06-05T20:25:27.808Z",
+      "sourceIds": [
+        "j-dd968a4e"
+      ]
+    }
+  ]
+}
