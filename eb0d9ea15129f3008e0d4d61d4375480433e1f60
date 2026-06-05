@@ -1,0 +1,54 @@
+{
+  "v": 1,
+  "commit": "eb0d9ea15129f3008e0d4d61d4375480433e1f60",
+  "generatedAt": "2026-06-05T19:52:49.752Z",
+  "loreId": "584966a8",
+  "atoms": [
+    {
+      "id": "f9cdaba7",
+      "loreId": "f9cdaba7",
+      "level": 0,
+      "decisionId": "inferred-2ea7a36f",
+      "intent": "Changes to src/store/notes.ts",
+      "summary": "U1 green (11 tests incl. decoupling). Committing, then U4.",
+      "files": [
+        "src/store/notes.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "64e229bc"
+      ],
+      "createdAt": "2026-06-05T19:52:19.625Z",
+      "sourceIds": [
+        "j-66d1a0f1"
+      ]
+    },
+    {
+      "id": "5c1ea1ca",
+      "loreId": "5c1ea1ca",
+      "level": 0,
+      "decisionId": "inferred-bdd5807e",
+      "intent": "Changes to tests/staleness.test.ts",
+      "summary": "**R-U4** — extend the strip:",
+      "files": [
+        "tests/staleness.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "d25f3490",
+        "ab110ea4",
+        "70fbce5c",
+        "79d06c3a",
+        "3d0b30c4"
+      ],
+      "createdAt": "2026-06-05T19:52:34.338Z",
+      "sourceIds": [
+        "j-31956073"
+      ]
+    }
+  ]
+}
