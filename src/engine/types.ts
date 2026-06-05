@@ -66,6 +66,14 @@ export interface DecisionAtom {
    * before serialization, so it never lands in the notes graph. See DESIGN.md.
    */
   stale?: boolean;
+  /**
+   * Derived, NOT persisted — same lifecycle as {@link stale}. Set when the
+   * commit this atom was consolidated at was undone by a `git revert` that is
+   * itself still in effect (net status: a revert-of-the-revert re-lands the
+   * approach and clears this). "The approach was tried and undone" — the
+   * failed-workaround memory a fresh agent needs so it doesn't retry it.
+   */
+  reverted?: boolean;
 }
 
 /** Level-1 atom: a rollup of several level-0 atoms, for budget compaction. */
@@ -81,6 +89,10 @@ export interface RollupAtom {
   sourceIds: string[];
   /** Derived, NOT persisted — see {@link DecisionAtom.stale}. */
   stale?: boolean;
+  /** Derived, NOT persisted — see {@link DecisionAtom.reverted}. Annotators
+   *  never set this on rollups (they live on the anchor, not a real commit);
+   *  present for uniform typing and the writeNote strip. */
+  reverted?: boolean;
 }
 
 export type Atom = DecisionAtom | RollupAtom;

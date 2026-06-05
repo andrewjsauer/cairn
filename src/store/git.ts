@@ -172,6 +172,44 @@ export function renamesInHistory(cwd: string): Map<string, string> {
   return renames;
 }
 
+/**
+ * Every `git revert` relationship in history as edges (reverter undid reverted).
+ * One git call: `%H%x00%B%x01` records, bodies parsed for every
+ * `This reverts commit <sha>` — full 40-char SHAs from standard reverts, 7+ char
+ * abbreviations from `git revert --reference`. Abbreviations resolve by unique
+ * prefix against the same call's %H universe (zero extra git calls); ambiguous
+ * or unknown prefixes are dropped — a missed flag, never a wrong one.
+ */
+export function revertEdgesInHistory(cwd: string): { reverter: string; reverted: string }[] {
+  const out = git(["log", "--format=%H%x00%B%x01"], { cwd, allowFail: true });
+  if (!out) return [];
+
+  const universe: string[] = [];
+  const candidates: { reverter: string; reverted: string }[] = [];
+  for (const record of out.split("\x01")) {
+    const sep = record.indexOf("\0");
+    if (sep === -1) continue;
+    const sha = record.slice(0, sep).trim(); // strip the newline between records
+    if (!/^[0-9a-f]{40}$/.test(sha)) continue;
+    universe.push(sha);
+    const body = record.slice(sep + 1);
+    for (const m of body.matchAll(/This reverts commit ([0-9a-f]{7,40})/g)) {
+      candidates.push({ reverter: sha, reverted: m[1] });
+    }
+  }
+
+  const edges: { reverter: string; reverted: string }[] = [];
+  for (const c of candidates) {
+    if (c.reverted.length === 40) {
+      edges.push(c);
+      continue;
+    }
+    const matches = universe.filter((u) => u.startsWith(c.reverted));
+    if (matches.length === 1) edges.push({ reverter: c.reverter, reverted: matches[0] });
+  }
+  return edges;
+}
+
 /** Commits (newest first) that touched a file, following renames. */
 export function commitsTouchingFile(file: string, cwd: string): string[] {
   const out = git(["log", "--follow", "--format=%H", "--", file], {
