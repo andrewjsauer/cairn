@@ -1,0 +1,119 @@
+{
+  "v": 1,
+  "commit": "f06c4b9a9aa69214018495988c600e73bb12c381",
+  "generatedAt": "2026-06-05T19:56:34.352Z",
+  "loreId": "c59c0c02",
+  "atoms": [
+    {
+      "id": "005e83b8",
+      "loreId": "005e83b8",
+      "level": 0,
+      "decisionId": "inferred-5af7f2f0",
+      "intent": "Changes to src/store/reverts.ts",
+      "summary": "**R-U4** — extend the strip:",
+      "files": [
+        "src/store/reverts.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-05T19:53:41.376Z",
+      "sourceIds": [
+        "j-2f47bd1b"
+      ]
+    },
+    {
+      "id": "2494ed4d",
+      "loreId": "2494ed4d",
+      "level": 0,
+      "decisionId": "inferred-911a6d8b",
+      "intent": "Changes to src/store/index.ts",
+      "summary": "**R-U2** — the new entries-based annotator:",
+      "files": [
+        "src/store/index.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "387719b0"
+      ],
+      "createdAt": "2026-06-05T19:53:47.672Z",
+      "sourceIds": [
+        "j-6ea474ec"
+      ]
+    },
+    {
+      "id": "0ec84239",
+      "loreId": "0ec84239",
+      "level": 0,
+      "decisionId": "inferred-d6456de9",
+      "intent": "Changes to src/mcp/graph.ts",
+      "summary": "Now `graph.ts` — keep entries through dedupe, call both annotators: My old_string missed the `resolveRename` import line added during the rename work. Correcting:",
+      "files": [
+        "src/mcp/graph.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "1fb52156",
+        "900ea81a",
+        "647832f5"
+      ],
+      "createdAt": "2026-06-05T19:54:47.940Z",
+      "sourceIds": [
+        "j-1f9c6d44",
+        "j-3796d97a",
+        "j-7c232b89",
+        "j-9fd84330"
+      ]
+    },
+    {
+      "id": "918d2174",
+      "loreId": "918d2174",
+      "level": 0,
+      "decisionId": "inferred-e0a780a5",
+      "intent": "Changes to src/mcp/format.ts",
+      "summary": "Now dedupe operates on entries: Now the marker in `format.ts`: The variable name now lies — renaming `stale` → `flags`:",
+      "files": [
+        "src/mcp/format.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "7de20f62"
+      ],
+      "createdAt": "2026-06-05T19:55:20.774Z",
+      "sourceIds": [
+        "j-0c40b7a8",
+        "j-55d796d0",
+        "j-d11f4808"
+      ]
+    },
+    {
+      "id": "b465ae4c",
+      "loreId": "b465ae4c",
+      "level": 0,
+      "decisionId": "inferred-a359a510",
+      "intent": "Changes to tests/integration.test.ts",
+      "summary": "The variable name now lies — renaming `stale` → `flags`:",
+      "files": [
+        "tests/integration.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "3f0e85f0",
+        "51b42483"
+      ],
+      "createdAt": "2026-06-05T19:55:48.397Z",
+      "sourceIds": [
+        "j-6d7c8c4c"
+      ]
+    }
+  ]
+}
