@@ -1,0 +1,101 @@
+{
+  "v": 1,
+  "commit": "bddef32be472b1213810fe7c8613947cadb405f0",
+  "generatedAt": "2026-06-05T20:15:10.281Z",
+  "loreId": "6bd6b316",
+  "atoms": [
+    {
+      "id": "7dddbebf",
+      "loreId": "7dddbebf",
+      "level": 0,
+      "decisionId": "inferred-9a7e9972",
+      "intent": "Changes to src/engine/compact.ts",
+      "summary": "The variable name now lies — renaming `stale` → `flags`:",
+      "files": [
+        "src/engine/compact.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "04d5757a",
+        "f0f6b6ca"
+      ],
+      "createdAt": "2026-06-05T19:57:09.612Z",
+      "sourceIds": [
+        "j-8f4000ca"
+      ]
+    },
+    {
+      "id": "785761a8",
+      "loreId": "785761a8",
+      "level": 0,
+      "decisionId": "inferred-57bd7277",
+      "intent": "Changes to src/capture/dream.ts",
+      "summary": "**R-U3** — the one-line eviction rule plus dream annotation:",
+      "files": [
+        "src/capture/dream.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "b1e41104",
+        "a12ff6ad",
+        "a642260e"
+      ],
+      "createdAt": "2026-06-05T19:57:27.349Z",
+      "sourceIds": [
+        "j-2010141f",
+        "j-2e3db515"
+      ]
+    },
+    {
+      "id": "840c839e",
+      "loreId": "840c839e",
+      "level": 0,
+      "decisionId": "inferred-c7522ff0",
+      "intent": "Changes to tests/engine.test.ts",
+      "summary": "**R-U3** — the one-line eviction rule plus dream annotation:",
+      "files": [
+        "tests/engine.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "c7b67612",
+        "4f43d380",
+        "ea8d1db9"
+      ],
+      "createdAt": "2026-06-05T19:57:44.049Z",
+      "sourceIds": [
+        "j-5a31c42a"
+      ]
+    },
+    {
+      "id": "356dc48c",
+      "loreId": "356dc48c",
+      "level": 0,
+      "decisionId": "inferred-91b2bd3d",
+      "intent": "Changes to tests/dream.test.ts",
+      "summary": "Now the eviction tests — engine-level precision plus dream round-trip: Annotation works in isolation but `consolidateGraph` still folds f.ts. Let me diff the compiled `compact.js` against source — and re-run the dream probe with flag introspection:",
+      "files": [
+        "tests/dream.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "7dda1dc0",
+        "8d641084"
+      ],
+      "createdAt": "2026-06-05T20:09:44.170Z",
+      "sourceIds": [
+        "j-6d5eebaf",
+        "j-7f128fc7",
+        "j-8d3713de"
+      ]
+    }
+  ]
+}
