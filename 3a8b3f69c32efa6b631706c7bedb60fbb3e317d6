@@ -1,0 +1,143 @@
+{
+  "v": 1,
+  "commit": "3a8b3f69c32efa6b631706c7bedb60fbb3e317d6",
+  "generatedAt": "2026-06-05T19:51:50.709Z",
+  "loreId": "8ff96631",
+  "atoms": [
+    {
+      "id": "5e14070a",
+      "loreId": "5e14070a",
+      "level": 0,
+      "decisionId": "inferred-e8e64c4f",
+      "intent": "Changes to docs/plans/2026-06-04-001-feat-revert-detection-plan.md",
+      "summary": "Probe done — three facts the plan needs:\n\n1. Standard reverts carry the **full 40-char SHA** in the body; revert-of-revert keeps the same body shape (subject becomes `Reapply \"…\"`), so net-status resolves purely on the edge graph.\n2. The `--reference` variant uses an **abbreviated SHA** (`d6a8fff (subject, date)`), so the parser must accept 7–40 hex chars — and the same one log call that finds reverts also yields the full SHA universe (`%H`), so prefixes resolve by unique `startsWith` with **zero extra git calls**.\n3. `git log --format='%H%x00%B%x01'` gives clean `sha\\0body\\x01` records — one … Applying the auto-resolutions to the plan:",
+      "files": [
+        "docs/plans/2026-06-04-001-feat-revert-detection-plan.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "11580c64"
+      ],
+      "createdAt": "2026-06-05T19:46:54.996Z",
+      "sourceIds": [
+        "j-093e76b8",
+        "j-43a6c022",
+        "j-50130bcf",
+        "j-d3657329",
+        "j-da84eeb4",
+        "j-e09b3868"
+      ]
+    },
+    {
+      "id": "021c84c9",
+      "loreId": "021c84c9",
+      "level": 0,
+      "decisionId": "inferred-eabdaa95",
+      "intent": "Changes to src/engine/types.ts",
+      "summary": "Executing the plan — same pipeline as the staleness build. Setting up the environment first.",
+      "files": [
+        "src/engine/types.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "1ac373f3",
+        "a628b30f"
+      ],
+      "createdAt": "2026-06-05T19:50:20.746Z",
+      "sourceIds": [
+        "j-1d2fd977",
+        "j-f98d235a"
+      ]
+    },
+    {
+      "id": "2981e040",
+      "loreId": "2981e040",
+      "level": 0,
+      "decisionId": "inferred-ac3231a5",
+      "intent": "Changes to src/engine/reverts.ts",
+      "summary": "Executing the plan — same pipeline as the staleness build. Setting up the environment first.",
+      "files": [
+        "src/engine/reverts.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-05T19:50:34.605Z",
+      "sourceIds": [
+        "j-b23b0b9e"
+      ]
+    },
+    {
+      "id": "1bfe1187",
+      "loreId": "1bfe1187",
+      "level": 0,
+      "decisionId": "inferred-24a28813",
+      "intent": "Changes to src/engine/index.ts",
+      "summary": "Now the pure resolver:",
+      "files": [
+        "src/engine/index.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "3ed88a17",
+        "489f7302",
+        "e56ba28b"
+      ],
+      "createdAt": "2026-06-05T19:50:42.704Z",
+      "sourceIds": [
+        "j-d34c2beb"
+      ]
+    },
+    {
+      "id": "507fa351",
+      "loreId": "507fa351",
+      "level": 0,
+      "decisionId": "inferred-1cb3cb76",
+      "intent": "Changes to src/store/git.ts",
+      "summary": "Now the pure resolver:",
+      "files": [
+        "src/store/git.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "38930329",
+        "85226637",
+        "5f63f53f",
+        "fce7b0ed",
+        "0d331561"
+      ],
+      "createdAt": "2026-06-05T19:50:57.055Z",
+      "sourceIds": [
+        "j-2b3d2f7b"
+      ]
+    },
+    {
+      "id": "96a2c022",
+      "loreId": "96a2c022",
+      "level": 0,
+      "decisionId": "inferred-f5503127",
+      "intent": "Changes to tests/reverts.test.ts",
+      "summary": "Now the git-side edge extraction:",
+      "files": [
+        "tests/reverts.test.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [],
+      "createdAt": "2026-06-05T19:51:28.964Z",
+      "sourceIds": [
+        "j-7fbd73d2"
+      ]
+    }
+  ]
+}
