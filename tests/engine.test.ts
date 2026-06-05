@@ -199,6 +199,42 @@ test("compactGraph folds STALE atoms before live ones of similar age", async () 
   assert.ok(covered.has("stale"), "stale atom folded into a rollup (provenance preserved)");
 });
 
+test("compactGraph: a REVERTED stale atom ranks like live (recency), not fold-first", async () => {
+  // The reverted atom's code is gone (stale) BECAUSE it was reverted. Without
+  // the exemption it would fold before the older live atom; with it, recency
+  // decides and the newer reverted atom is kept verbatim.
+  const liveOld = mkAtom({
+    id: "live", loreId: "live", files: ["live.ts"],
+    summary: "reasoning ".repeat(20), createdAt: "2026-05-10T00:00:00.000Z",
+  });
+  const revertedNew = mkAtom({
+    id: "rev", loreId: "rev", files: ["gone.ts"], stale: true, reverted: true,
+    summary: "reasoning ".repeat(20), createdAt: "2026-05-20T00:00:00.000Z",
+  });
+  const budget = atomTokens(liveOld) + 1;
+
+  const out = await compactGraph([liveOld, revertedNew], fakeComplete({ rollup: "folded" }), { tokenBudget: budget });
+  assert.ok(out.some((a) => a.level === 0 && a.id === "rev"), "reverted atom kept verbatim (newer)");
+  assert.ok(!out.some((a) => a.level === 0 && a.id === "live"), "older live atom folded by recency");
+});
+
+test("compactGraph: an OLD reverted atom still folds — no immortality", async () => {
+  const revertedOld = mkAtom({
+    id: "rev", loreId: "rev", files: ["gone.ts"], stale: true, reverted: true,
+    summary: "reasoning ".repeat(20), createdAt: "2026-05-10T00:00:00.000Z",
+  });
+  const liveNew = mkAtom({
+    id: "live", loreId: "live", files: ["live.ts"],
+    summary: "reasoning ".repeat(20), createdAt: "2026-05-20T00:00:00.000Z",
+  });
+  const budget = atomTokens(liveNew) + 1;
+
+  const out = await compactGraph([revertedOld, liveNew], fakeComplete({ rollup: "folded" }), { tokenBudget: budget });
+  assert.ok(out.some((a) => a.level === 0 && a.id === "live"), "newer live kept");
+  const covered = new Set(out.filter(isRollupAtom).flatMap((r) => r.sourceIds));
+  assert.ok(covered.has("rev"), "old reverted atom folded into a rollup by recency");
+});
+
 test("compactGraph with no stale atoms is unchanged recency behavior", async () => {
   // All live: newest survives, oldest folds — exactly as before the bias existed.
   const atoms = Array.from({ length: 4 }, (_, i) =>

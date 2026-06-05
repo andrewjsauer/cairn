@@ -8,6 +8,7 @@ import {
   writeNote,
   removeNote,
   annotateStale,
+  annotateReverted,
   type NotePayload,
 } from "../store/index.js";
 import { STORE_TOKEN_BUDGET } from "../config.js";
@@ -65,10 +66,12 @@ export async function consolidateGraph(
   }
 
   // Mark atoms whose code is gone from HEAD so compactGraph folds them into
-  // rollups before live reasoning. Done only when we're actually compacting, and
-  // stripped again by writeNote so it never persists (it would be wrong the
-  // moment HEAD moves).
+  // rollups before live reasoning — except net-reverted atoms, whose deleted
+  // code is the point (the don't-retry memory ranks like live). Done only when
+  // we're actually compacting, and stripped again by writeNote so neither flag
+  // ever persists.
   annotateStale(allAtoms, root);
+  annotateReverted(entries, root);
 
   const compacted = await compactGraph(allAtoms, complete, { tokenBudget: budget });
   const keptIds = new Set(compacted.map((a) => a.loreId));

@@ -86,11 +86,15 @@ export async function compactGraph(
   // Keep level-0 atoms that fit, but bias eviction toward STALE atoms — the ones
   // whose code is gone from HEAD. Live atoms claim budget first (newest verbatim),
   // stale atoms only if room remains, so dead-code reasoning compresses out of the
-  // hot set ahead of live reasoning of similar age. With no atoms stale this is
-  // exactly the old behavior (newest-first greedy keep).
+  // hot set ahead of live reasoning of similar age. EXCEPTION: a net-REVERTED
+  // atom's code being gone is the point of the revert, not evidence of
+  // irrelevance — its "don't retry this" value ranks it like live (plain
+  // recency), though it still ages out eventually (no immortality). With no
+  // atoms flagged this is exactly the old behavior (newest-first greedy keep).
+  const foldFirst = (a: Atom) => (a.stale && !a.reverted ? 1 : 0);
   const candidates = [...level0].sort((a, b) => {
-    const staleRank = (a.stale ? 1 : 0) - (b.stale ? 1 : 0);
-    if (staleRank !== 0) return staleRank; // live (0) before stale (1)
+    const rank = foldFirst(a) - foldFirst(b);
+    if (rank !== 0) return rank; // live-or-reverted (0) before stale (1)
     return b.createdAt.localeCompare(a.createdAt); // newer before older
   });
   const keep: Atom[] = [];

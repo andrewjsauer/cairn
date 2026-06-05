@@ -103,9 +103,11 @@ test("the dream folds a deleted-file atom before a live one, and never persists 
   gitC(repo, ["rm", "-q", "gone.ts"]);
   gitC(repo, ["commit", "-q", "-m", "chore: drop gone.ts"]);
 
-  // Budget with room for ~one verbatim atom, forcing a choice.
-  const oneAtom = atomTokens(readAllAtoms(repo)[0].atom);
-  const result = await consolidateGraph(repo, fake, { budget: oneAtom + 1, now: "2026-06-01T00:00:00.000Z" });
+  // Budget with room for exactly one verbatim atom, forcing a choice. Use the
+  // LARGEST atom's cost so the budget is independent of note-listing order and
+  // of whether linkSupersedes added a (size-bearing) supersedes line.
+  const maxAtom = Math.max(...readAllAtoms(repo).map((e) => atomTokens(e.atom)));
+  const result = await consolidateGraph(repo, fake, { budget: maxAtom + 1, now: "2026-06-01T00:00:00.000Z" });
   assert.equal(result.ok, true);
   assert.ok(result.rollups >= 1, "produced a rollup");
 
@@ -120,6 +122,40 @@ test("the dream folds a deleted-file atom before a live one, and never persists 
   // The derived flag never reached the notes store.
   for (const { atom } of readAllAtoms(repo)) {
     assert.equal(atom.stale, undefined, "no persisted atom carries the stale flag");
+  }
+});
+
+test("the dream keeps a reverted decision verbatim over an older live one, and persists no flags", async () => {
+  const repo = makeRepo();
+
+  // keep.ts (older, live) then f.ts (newer, then bare-reverted).
+  for (const [i, f] of [["keep.ts", "2026-05-10"], ["f.ts", "2026-05-20"]].entries()) {
+    const now = `${f[1]}T00:00:00.000Z`;
+    openDecision(repo, `decision ${i} about ${f[0]}`, [], now);
+    writeFileSync(join(repo, f[0]), `// rev ${i} with enough text to weigh something\n`);
+    recordEdit(repo, { toolName: "Write", filePath: join(repo, f[0]), reason: `change ${i}`, ts: now });
+    gitC(repo, ["add", "-A"]);
+    gitC(repo, ["commit", "-q", "-m", `feat: ${f[0]}`]);
+    await consolidate(repo, fake, { now });
+  }
+  gitC(repo, ["revert", "--no-edit", "HEAD"]); // f.ts decision: reverted AND stale
+
+  // Order-independent budget: the largest atom + 1, so exactly one fits
+  // regardless of note-listing order or a supersedes line's extra tokens.
+  const maxAtom = Math.max(...readAllAtoms(repo).map((e) => atomTokens(e.atom)));
+  const result = await consolidateGraph(repo, fake, { budget: maxAtom + 1, now: "2026-06-01T00:00:00.000Z" });
+  assert.equal(result.ok, true);
+
+  // The reverted (newer) decision survives verbatim — without the exemption its
+  // staleness would have folded it first; the older live decision folds by recency.
+  const stored = readAllAtoms(repo).map((x) => x.atom);
+  const fVerbatim = stored.some((a) => !isRollupAtom(a) && a.files.includes("f.ts"));
+  assert.equal(fVerbatim, true, "reverted decision kept verbatim (newer, ranks like live)");
+
+  // Neither derived flag persisted anywhere.
+  for (const { atom } of readAllAtoms(repo)) {
+    assert.equal(atom.stale, undefined);
+    assert.equal(atom.reverted, undefined);
   }
 });
 
