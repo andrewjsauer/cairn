@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "commit": "cb543de922170d3054bd112a18e296b05c613330",
+  "generatedAt": "2026-06-05T20:20:48.044Z",
+  "loreId": "c219eedb",
+  "atoms": [
+    {
+      "id": "57b03f20",
+      "loreId": "57b03f20",
+      "level": 0,
+      "decisionId": "inferred-16455400",
+      "intent": "Changes to src/store/notes.ts",
+      "summary": "All units complete. Quality phase — Simplify first (required, >30 lines), then Tier-1 review. Capturing the diff:",
+      "files": [
+        "src/store/notes.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "64e229bc",
+        "f9cdaba7"
+      ],
+      "createdAt": "2026-06-05T20:17:56.250Z",
+      "sourceIds": [
+        "j-74233a2f",
+        "j-d26c9f05"
+      ]
+    },
+    {
+      "id": "cfd4f9fc",
+      "loreId": "cfd4f9fc",
+      "level": 0,
+      "decisionId": "inferred-9880ecf5",
+      "intent": "Changes to src/store/reverts.ts",
+      "summary": "All units complete. Quality phase — Simplify first (required, >30 lines), then Tier-1 review. Capturing the diff:",
+      "files": [
+        "src/store/reverts.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "005e83b8"
+      ],
+      "createdAt": "2026-06-05T20:18:12.417Z",
+      "sourceIds": [
+        "j-a75d8a1f"
+      ]
+    },
+    {
+      "id": "5d093f86",
+      "loreId": "5d093f86",
+      "level": 0,
+      "decisionId": "inferred-eaba944e",
+      "intent": "Changes to src/mcp/graph.ts",
+      "summary": "All units complete. Quality phase — Simplify first (required, >30 lines), then Tier-1 review. Capturing the diff:",
+      "files": [
+        "src/mcp/graph.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "1fb52156",
+        "900ea81a",
+        "647832f5",
+        "0ec84239"
+      ],
+      "createdAt": "2026-06-05T20:18:35.559Z",
+      "sourceIds": [
+        "j-dab263bf",
+        "j-db4b4ee3"
+      ]
+    },
+    {
+      "id": "ced05abc",
+      "loreId": "ced05abc",
+      "level": 0,
+      "decisionId": "inferred-20431d00",
+      "intent": "Changes to src/store/git.ts",
+      "summary": "All units complete. Quality phase — Simplify first (required, >30 lines), then Tier-1 review. Capturing the diff:",
+      "files": [
+        "src/store/git.ts"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "38930329",
+        "507fa351",
+        "85226637",
+        "5f63f53f",
+        "fce7b0ed",
+        "0d331561"
+      ],
+      "createdAt": "2026-06-05T20:18:45.887Z",
+      "sourceIds": [
+        "j-9a2470b7"
+      ]
+    }
+  ]
+}
