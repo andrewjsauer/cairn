@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "commit": "8e04a75e54d23041989a5372c971aff8f9065c9a",
+  "generatedAt": "2026-06-05T20:27:24.087Z",
+  "loreId": "050a2c58",
+  "atoms": [
+    {
+      "id": "f5cefec0",
+      "loreId": "f5cefec0",
+      "level": 0,
+      "decisionId": "inferred-907516f7",
+      "intent": "Changes to docs/plans/2026-06-04-001-feat-revert-detection-plan.md",
+      "summary": "Simplify committed. Now the Tier-1 correctness review — 3 finder angles on the updated diff:",
+      "files": [
+        "docs/plans/2026-06-04-001-feat-revert-detection-plan.md"
+      ],
+      "constraints": [],
+      "rejected": [],
+      "confidence": "medium",
+      "supersedes": [
+        "5e14070a",
+        "11580c64"
+      ],
+      "createdAt": "2026-06-05T20:27:17.944Z",
+      "sourceIds": [
+        "j-b37e7ba8"
+      ]
+    }
+  ]
+}
