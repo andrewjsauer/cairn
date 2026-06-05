@@ -26,12 +26,15 @@ export function formatRecent(n: number, result: RecallResult): string {
 
 /** Terse, honest marker: the code this record describes is gone from HEAD. */
 const STALE_TAG = "  ⚠ STALE — code no longer present at HEAD";
+/** The approach was undone — but the constraints it recorded may still bite.
+ *  Deliberately NOT "ignore this": the don't-retry signal is the value. */
+const REVERTED_TAG = "  ↩ REVERTED — this approach was undone; its constraints may still apply";
 
 function renderForRead(atom: Atom): string {
   const date = atom.createdAt.slice(0, 10);
-  const stale = atom.stale ? STALE_TAG : "";
+  const flags = `${atom.reverted ? REVERTED_TAG : ""}${atom.stale ? STALE_TAG : ""}`;
   if (isDecisionAtom(atom)) {
-    const lines: string[] = [`(${date}) ${atom.intent}  [lore-id ${atom.loreId}]${stale}`];
+    const lines: string[] = [`(${date}) ${atom.intent}  [lore-id ${atom.loreId}]${flags}`];
     if (atom.summary) lines.push(`   ${atom.summary}`);
     for (const c of atom.constraints) lines.push(`   • constraint: ${c}`);
     for (const r of atom.rejected) {
@@ -41,7 +44,7 @@ function renderForRead(atom: Atom): string {
     if (atom.supersedes.length) lines.push(`   supersedes: ${atom.supersedes.join(", ")}`);
     return lines.join("\n");
   }
-  return `(${date}) [rollup of ${atom.sourceIds.length}] ${atom.summary}  [lore-id ${atom.loreId}]${stale}`;
+  return `(${date}) [rollup of ${atom.sourceIds.length}] ${atom.summary}  [lore-id ${atom.loreId}]${flags}`;
 }
 
 function budgetNote(result: RecallResult): string {

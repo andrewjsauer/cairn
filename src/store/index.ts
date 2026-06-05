@@ -7,3 +7,4 @@ export * from "./journal.js";
 export * from "./trailers.js";
 export * from "./notes.js";
 export * from "./staleness.js";
+export * from "./reverts.js";

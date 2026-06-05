@@ -225,6 +225,49 @@ test("rename resolution: a renamed file's chain is found via --follow and NOT fl
   assert.ok(whyOld.atoms.length >= 1, "old-path query still resolves the chain");
 });
 
+test("revert detection: a bare git revert flags the decision; revert-of-revert clears it", async () => {
+  const repo = makeRepo();
+
+  // Control decision on keep.ts (older), then the doomed decision on f.ts.
+  for (const [i, f] of [["keep.ts", "2026-05-25"], ["f.ts", "2026-05-26"]].entries()) {
+    const now = `${f[1]}T10:00:00.000Z`;
+    openDecision(repo, `decision ${i} about ${f[0]}`, [], now);
+    writeFileSync(join(repo, f[0]), `// ${i}\n`);
+    recordEdit(repo, { toolName: "Write", filePath: join(repo, f[0]), reason: `work ${i}`, ts: now });
+    gitC(repo, ["add", "-A"]);
+    gitC(repo, ["commit", "-q", "-m", `feat: ${f[0]}`]);
+    await consolidate(repo, fakeComplete, { now });
+  }
+
+  // Bare git revert — no journal, no capture. The consequence that bypassed capture.
+  gitC(repo, ["revert", "--no-edit", "HEAD"]);
+
+  // recent(): the reverted decision is flagged (and stale — the revert deleted
+  // its file); the control decision is untouched. Order preserved.
+  const recent = recall(allAtoms(repo), { recent: 5, tokenBudget: 2000 });
+  assert.equal(recent.atoms.length, 2);
+  const fAtom = recent.atoms.find((a) => a.files.includes("f.ts"))!;
+  const keepAtom = recent.atoms.find((a) => a.files.includes("keep.ts"))!;
+  assert.equal(fAtom.reverted, true, "bare revert flagged the decision");
+  assert.equal(fAtom.stale, true, "revert deleted the file -> also stale");
+  assert.equal(keepAtom.reverted, undefined);
+  assert.equal(keepAtom.stale, false);
+
+  // why(f.ts): chain served with BOTH tags rendered, nothing dropped.
+  const why = recall(atomsForFile(repo, "f.ts"), { file: "f.ts", tokenBudget: 2000 });
+  assert.equal(why.atoms.length, 1);
+  const rendered = formatChain("f.ts", why);
+  assert.match(rendered, /REVERTED — this approach was undone/);
+  assert.match(rendered, /STALE — code no longer present/);
+
+  // Revert the revert: the approach re-lands; net status clears, file restored.
+  gitC(repo, ["revert", "--no-edit", "HEAD"]);
+  const after = recall(allAtoms(repo), { recent: 5, tokenBudget: 2000 });
+  const fAfter = after.atoms.find((a) => a.files.includes("f.ts"))!;
+  assert.equal(fAfter.reverted, undefined, "revert-of-revert cleared the flag");
+  assert.equal(fAfter.stale, false, "file restored by the re-land");
+});
+
 // Keeps tsc/eslint from flagging the import in environments without it.
 void existsSync;
 void readFileSync;

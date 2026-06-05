@@ -10,7 +10,9 @@ import {
   filesChanged,
   renamesInHistory,
   annotateStale,
+  annotateReverted,
   type LoreRecord,
+  type AtomEntry,
 } from "../store/index.js";
 
 /**
@@ -26,7 +28,9 @@ import {
  */
 
 export function allAtoms(cwd: string): Atom[] {
-  return annotateStale(dedupe(readAllAtoms(cwd).map((x) => x.atom)), cwd);
+  const entries = dedupe(readAllAtoms(cwd));
+  annotateReverted(entries, cwd);
+  return annotateStale(entries.map((e) => e.atom), cwd);
 }
 
 export function atomsForFile(
@@ -40,31 +44,36 @@ export function atomsForFile(
   // may pass a precomputed map to share the git call with its own recall query.
   const canonical = (p: string) => resolveRename(p, renames);
   const target = canonical(file);
-  const fromNotes = readAllAtoms(cwd)
-    .map((x) => x.atom)
-    .filter((a) => a.files.some((f) => canonical(f) === target));
+  const fromNotes = readAllAtoms(cwd).filter(({ atom }) =>
+    atom.files.some((f) => canonical(f) === target)
+  );
 
   // Commits Cairn already noted carry their reasoning in the (richer) note; only
   // read trailers for commits WITHOUT a Cairn note — i.e. Lore records written
   // by another tool. That keeps interop real without double-counting our own work.
   const noted = new Set(listNotes(cwd).map((n) => n.commit));
-  const fromTrailers: Atom[] = [];
+  const fromTrailers: AtomEntry[] = [];
   for (const sha of commitsTouchingFile(file, cwd)) {
     if (noted.has(sha)) continue;
     const record = readCommitTrailers(sha, cwd);
-    if (record) fromTrailers.push(trailerToAtom(record, sha, cwd));
+    if (record) fromTrailers.push({ atom: trailerToAtom(record, sha, cwd), commit: sha });
   }
 
-  return annotateStale(dedupe([...fromNotes, ...fromTrailers]), cwd, renames);
+  const entries = dedupe([...fromNotes, ...fromTrailers]);
+  annotateReverted(entries, cwd);
+  return annotateStale(entries.map((e) => e.atom), cwd, renames);
 }
 
-/** Keep one atom per Lore-id (the newest), so a note atom and its own commit
- *  trailer don't show up twice. */
-function dedupe(atoms: Atom[]): Atom[] {
-  const byId = new Map<string, Atom>();
-  for (const atom of atoms) {
-    const prior = byId.get(atom.loreId);
-    if (!prior || atom.createdAt > prior.createdAt) byId.set(atom.loreId, atom);
+/** Keep one entry per Lore-id (the newest atom wins, and its commit is the one
+ *  later annotated), so a note atom and its own commit trailer don't show up
+ *  twice. */
+function dedupe(entries: AtomEntry[]): AtomEntry[] {
+  const byId = new Map<string, AtomEntry>();
+  for (const entry of entries) {
+    const prior = byId.get(entry.atom.loreId);
+    if (!prior || entry.atom.createdAt > prior.atom.createdAt) {
+      byId.set(entry.atom.loreId, entry);
+    }
   }
   return [...byId.values()];
 }
