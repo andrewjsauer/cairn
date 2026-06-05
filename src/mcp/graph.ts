@@ -2,7 +2,6 @@ import type { Atom, DecisionAtom } from "../engine/index.js";
 import { resolveRename } from "../engine/index.js";
 import {
   readAllAtoms,
-  listNotes,
   commitsTouchingFile,
   readCommitTrailers,
   commitSubject,
@@ -44,14 +43,16 @@ export function atomsForFile(
   // may pass a precomputed map to share the git call with its own recall query.
   const canonical = (p: string) => resolveRename(p, renames);
   const target = canonical(file);
-  const fromNotes = readAllAtoms(cwd).filter(({ atom }) =>
+  const noteEntries = readAllAtoms(cwd);
+  const fromNotes = noteEntries.filter(({ atom }) =>
     atom.files.some((f) => canonical(f) === target)
   );
 
   // Commits Cairn already noted carry their reasoning in the (richer) note; only
   // read trailers for commits WITHOUT a Cairn note — i.e. Lore records written
   // by another tool. That keeps interop real without double-counting our own work.
-  const noted = new Set(listNotes(cwd).map((n) => n.commit));
+  // (Derived from the entries already in hand — no second `git notes list`.)
+  const noted = new Set(noteEntries.map((e) => e.commit));
   const fromTrailers: AtomEntry[] = [];
   for (const sha of commitsTouchingFile(file, cwd)) {
     if (noted.has(sha)) continue;

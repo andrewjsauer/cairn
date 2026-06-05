@@ -201,6 +201,9 @@ export function revertEdgesInHistory(cwd: string): { reverter: string; reverted:
   const edges: { reverter: string; reverted: string }[] = [];
   for (const c of candidates) {
     if (c.reverted.length === 40) {
+      // Not just a fast path: a full SHA is unambiguous even when its commit
+      // isn't in this history (rebased/grafted away), so it is kept verbatim
+      // rather than dropped by the universe check below.
       edges.push(c);
       continue;
     }

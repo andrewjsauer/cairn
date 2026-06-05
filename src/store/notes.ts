@@ -2,6 +2,13 @@ import type { Atom } from "../engine/types.js";
 import { git } from "./git.js";
 import { NOTES_REF } from "../config.js";
 
+/** An atom paired with the commit whose note it was read from. The shape every
+ *  note read produces and the commit-keyed annotators (reverts) consume. */
+export interface AtomEntry {
+  atom: Atom;
+  commit: string;
+}
+
 /**
  * The compacted graph lives in the refs/notes/cairn namespace.
  *
@@ -77,8 +84,8 @@ export function listNotes(cwd: string): { note: string; commit: string }[] {
 }
 
 /** Every atom in the graph, with the commit it was consolidated at. */
-export function readAllAtoms(cwd: string): { atom: Atom; commit: string }[] {
-  const result: { atom: Atom; commit: string }[] = [];
+export function readAllAtoms(cwd: string): AtomEntry[] {
+  const result: AtomEntry[] = [];
   for (const { commit } of listNotes(cwd)) {
     const payload = readNote(commit, cwd);
     if (!payload) continue;
