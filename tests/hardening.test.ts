@@ -702,3 +702,101 @@ test("open-from-plan opens a decision whose intent is derived from the plan", ()
   assert.ok(id, "a decision is now active");
   assert.equal(getDecision(repo, id!)!.intent, "Do X", "heading marker stripped, intent kept");
 });
+
+// --- foreign trailers must stay in git's trailer block after the amend ---
+
+test("amend keeps foreign trailers (Signed-off-by) in the SAME block git parses", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "signed-off work", [], now);
+  writeFileSync(join(repo, "so.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "so.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-F", "-"], "feat: x\n\nSigned-off-by: A <a@b.c>");
+  await consolidate(repo, fakeEcho, { now });
+
+  // The regression: joining with a blank line starts a NEW final block, so
+  // git's parser sees only Cairn's trailers and demotes Signed-off-by to body
+  // text. Assert against git's OWN parse, not the raw message.
+  const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  const parsed = gitC(repo, ["interpret-trailers", "--parse"], message);
+  assert.ok(/^Signed-off-by: A <a@b\.c>$/m.test(parsed), "foreign trailer survives in the parsed block");
+  assert.ok(/^Lore-id:/m.test(parsed), "Cairn's trailers in the same parsed block");
+});
+
+// --- amend race: HEAD moved between sha capture and the amend ---
+
+test("amend is refused when HEAD moves mid-consolidation; note lands on the pre-move commit", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "racy", [], now);
+  writeFileSync(join(repo, "r1.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "r1.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: r1"]);
+  const oldSha = gitC(repo, ["rev-parse", "HEAD"]);
+
+  // A concurrent session commits WHILE the model call is in flight: HEAD is no
+  // longer the commit whose sha (and guards) consolidation evaluated.
+  let moved = false;
+  const sneaky: Complete = async (prompt) => {
+    if (!moved) {
+      moved = true;
+      writeFileSync(join(repo, "r2.ts"), "2\n");
+      gitC(repo, ["add", "-A"]);
+      gitC(repo, ["commit", "-q", "-m", "feat: concurrent"]);
+    }
+    return fakeEcho(prompt);
+  };
+  const result = await consolidate(repo, sneaky, { now });
+  assert.equal(result.amended, false, "moved HEAD: the amend is refused");
+
+  // The concurrent commit's message was NOT silently replaced…
+  const newHead = gitC(repo, ["rev-parse", "HEAD"]);
+  assert.notEqual(newHead, oldSha, "the sneaky commit really moved HEAD");
+  const newMessage = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  assert.ok(!/^Lore-id:/m.test(newMessage), "concurrent commit's message untouched");
+  // …and the reasoning still landed, keyed on the pre-move sha (its right home).
+  assert.ok(gitC(repo, ["notes", "--ref=cairn", "show", oldSha]).length > 0, "note on the pre-move commit");
+});
+
+// --- multi-line constraints dedupe across amends in trailer (oneLine) space ---
+
+test("a multi-line constraint does not duplicate across re-amends", async () => {
+  const repo = makeRepo();
+  const fakeNewline: Complete = async (prompt) => {
+    if (prompt.includes("Cluster them")) {
+      const ids = [...prompt.matchAll(/id=(j-[0-9a-f]+)/g)].map((m) => m[1]);
+      return JSON.stringify({ clusters: ids.map((id) => [id]) });
+    }
+    if (prompt.startsWith("Summarize these related decisions")) {
+      return JSON.stringify({ summary: "r" });
+    }
+    // The model is free to return a constraint containing a newline; the
+    // trailer round-trip collapses it to "line1 line2".
+    return JSON.stringify({ intent: "i", summary: "s", constraints: ["line1\nline2"], confidence: "high" });
+  };
+
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "multiline", [], now);
+  writeFileSync(join(repo, "m.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "m.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: m"]);
+  await consolidate(repo, fakeNewline, { now });
+
+  // Re-journal and consolidate at the same logical commit: the loreId changes
+  // (new sourceIds), so the trailer record is UNIONED with the one read back
+  // from the message — where the constraint is already whitespace-collapsed.
+  const later = "2026-05-20T00:01:00.000Z";
+  writeFileSync(join(repo, "m.ts"), "2\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "m.ts"), reason: "again", ts: later });
+  await consolidate(repo, fakeNewline, { now: later });
+
+  const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  assert.equal(
+    (message.match(/^Constraint: line1 line2$/gm) ?? []).length,
+    1,
+    "exactly one Constraint line — raw and collapsed forms dedupe to one"
+  );
+});

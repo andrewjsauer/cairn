@@ -9,7 +9,7 @@ import {
 } from "../engine/index.js";
 import {
   repoRoot,
-  headSha,
+  headShaIfAny,
   readEntries,
   readDecisions,
   consumeEntries,
@@ -19,6 +19,7 @@ import {
   removeNote,
   appendTrailersToCommit,
   emitTrailers,
+  oneLine,
   readCommitTrailers,
   writeLastConsolidatedHead,
   type JournalEntry,
@@ -74,12 +75,8 @@ export async function consolidate(
   // A repo with zero commits has no HEAD to consolidate against. Bail BEFORE
   // any model call is spent; the journal is untouched (nothing was consumed),
   // so the first real commit's trigger picks everything up.
-  let sha: string;
-  try {
-    sha = headSha(root);
-  } catch {
-    return { ok: false, reason: "no-head", written: 0, amended: false };
-  }
+  const sha = headShaIfAny(root);
+  if (!sha) return { ok: false, reason: "no-head", written: 0, amended: false };
 
   const now = opts.now ?? new Date().toISOString();
   const decisions = readDecisions(root);
@@ -150,8 +147,15 @@ export async function consolidate(
   consumeEntries(root, new Set(entries.map((e) => e.id)));
 
   // Remember where HEAD ended up so the commit-trigger gate can tell a real
-  // new commit from a fresh-looking HEAD that never moved.
-  writeLastConsolidatedHead(root, noteSha);
+  // new commit from a fresh-looking HEAD that never moved. Consolidation has
+  // already fully succeeded by here, so a failed pointer write must not
+  // propagate — worst case the next trigger re-runs a redundant amend that
+  // short-circuits as already-current (a no-op).
+  try {
+    writeLastConsolidatedHead(root, noteSha);
+  } catch (err) {
+    process.stderr.write(`cairn: failed to record last consolidated head: ${String(err)}\n`);
+  }
 
   return {
     ok: true,
@@ -165,7 +169,12 @@ export async function consolidate(
 const CONFIDENCE_RANK: Record<Confidence, number> = { low: 0, medium: 1, high: 2 };
 
 function buildLoreRecord(atoms: DecisionAtom[]): LoreRecord {
-  const constraints = [...new Set(atoms.flatMap((a) => a.constraints))];
+  // Constraints round-trip through the trailer block via oneLine() (whitespace
+  // collapsed), so dedupe in that same normalized space — otherwise a
+  // multi-line constraint ("a\nb") and its trailer form ("a b") read as
+  // distinct and accumulate duplicate Constraint lines across amends. Atom
+  // content in notes stays raw.
+  const constraints = [...new Set(atoms.flatMap((a) => a.constraints).map(oneLine))];
   const rejected = uniqueRejected(atoms.flatMap((a) => a.rejected));
   // Conservative: the commit is only as settled as its least-settled decision.
   const confidence = atoms.reduce<Confidence>(
@@ -190,7 +199,9 @@ function unionLoreRecords(record: LoreRecord, prior: LoreRecord | null): LoreRec
   if (!prior) return record;
   return {
     loreId: record.loreId,
-    constraints: [...new Set([...prior.constraints, ...record.constraints])],
+    // Same oneLine() normalization as buildLoreRecord: the prior side was read
+    // back from trailers (already collapsed), the new side may not be.
+    constraints: [...new Set([...prior.constraints, ...record.constraints].map(oneLine))],
     rejected: uniqueRejected([...prior.rejected, ...record.rejected]),
     // Conservative both ways: the commit is only as settled as its
     // least-settled record, old or new.
@@ -234,7 +245,9 @@ function uniqueRejected(rs: Rejected[]): Rejected[] {
   const seen = new Set<string>();
   const out: Rejected[] = [];
   for (const r of rs) {
-    const key = r.alternative.toLowerCase();
+    // oneLine for the same reason as constraints: the trailer round-trip
+    // collapses whitespace, so compare alternatives in that normalized space.
+    const key = oneLine(r.alternative).toLowerCase();
     if (!r.alternative || seen.has(key)) continue;
     seen.add(key);
     out.push(r);

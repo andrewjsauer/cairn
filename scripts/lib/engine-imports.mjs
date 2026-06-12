@@ -17,7 +17,7 @@ import { join } from "node:path";
 const AMBIENT_DENYLIST = new Set(["process", "fetch", "globalThis"]);
 
 /** Recursively list *.ts files under dir. */
-function tsFiles(dir) {
+export function tsFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) return tsFiles(full);

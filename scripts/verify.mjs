@@ -10,11 +10,11 @@
  * (scripts/verify-cairn.workflow.js) — run that for a deeper, narrated audit.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanEngineDir, assertChildProcessConfinedTo } from "./lib/engine-imports.mjs";
+import { scanEngineDir, assertChildProcessConfinedTo, tsFiles } from "./lib/engine-imports.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 let failures = 0;
@@ -37,13 +37,6 @@ function run(label, cmd) {
 
 function assert(label, cond, detail = "") {
   cond ? pass(label, detail) : fail(label, detail);
-}
-
-function tsFiles(dir) {
-  return readdirSync(dir).flatMap((n) => {
-    const p = join(dir, n);
-    return statSync(p).isDirectory() ? tsFiles(p) : n.endsWith(".ts") ? [p] : [];
-  });
 }
 
 console.log("\n\x1b[1mCairn — local verification\x1b[0m\n");

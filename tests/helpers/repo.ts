@@ -67,11 +67,6 @@ export const fakeEcho: Complete = async (prompt) => {
   });
 };
 
-/** Absolute path to the built CLI, resolved from this file (not process.cwd()). */
-export function cliPath(): string {
-  return fileURLToPath(new URL("../../dist/cli.js", import.meta.url));
-}
-
 /**
  * Command + args to run the CLI FROM SOURCE via tsx, so tests that spawn the
  * CLI exercise the current code and never green-light a stale dist/ artifact.

@@ -149,8 +149,9 @@ Built against the brief, with the full capture/consolidation trigger set wired (
 ```
 src/engine/   ingest · compact · recall · overlap   — pure; zero imports from git/CC/store/SDK
 src/store/    journal · notes · trailers · git       — the only git-aware layer
+src/read/     graph — delivery-agnostic read assembly (notes ∪ trailers ∪ annotations)
 src/capture/  decision · journal · consolidate       — orchestrates engine + store
-src/mcp/      server (why, recent) · graph · format   — read-only MCP server
+src/mcp/      server (why, recent) · format   — read-only MCP server
 src/complete.ts   the injected complete() (the one Anthropic-SDK adapter)
 hooks/, skills/, .mcp.json, .claude-plugin/   the Claude Code plugin
 ```
