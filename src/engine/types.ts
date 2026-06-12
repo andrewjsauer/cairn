@@ -134,6 +134,10 @@ export interface RecallQuery {
 export interface RecallResult {
   atoms: Atom[];
   tokensUsed: number;
-  /** True if atoms were dropped to fit the budget. */
+  /** True if atoms were dropped to fit the BUDGET (never set by the n-cap). */
   truncated: boolean;
+  /** True if recent(n) stopped at the requested n — distinct from budget
+   *  pressure, so the rendered message never claims trimming that didn't
+   *  happen. Chain queries never set this. */
+  limited: boolean;
 }

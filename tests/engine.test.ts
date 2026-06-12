@@ -287,3 +287,73 @@ function mkAtom(over: Partial<DecisionAtom>): DecisionAtom {
     ...over,
   };
 }
+
+// --- recall contract: no mid-chain gaps; n-cap vs budget reported separately ---
+
+test("recall drops ALL older level-0 atoms once one does not fit (no mid-chain gap)", async () => {
+  const t = (d: string) => `2026-05-0${d}T00:00:00.000Z`;
+  const aOld = mkAtom({ id: "old1", loreId: "old1", createdAt: t("1"), summary: "s ".repeat(20) });
+  const aMid = mkAtom({ id: "mid1", loreId: "mid1", createdAt: t("2"), summary: "m ".repeat(300) });
+  const aNew = mkAtom({ id: "new1", loreId: "new1", createdAt: t("3"), summary: "n ".repeat(600) });
+  const budget = atomTokens(aNew) + atomTokens(aOld) + 1;
+  // Sanity: the cheap OLD atom would fit by cost alone — the contract, not the
+  // arithmetic, is what must exclude it.
+  assert.ok(atomTokens(aNew) + atomTokens(aOld) <= budget, "old would fit by cost");
+  assert.ok(atomTokens(aNew) + atomTokens(aMid) > budget, "mid genuinely overflows");
+
+  const result = recall([aOld, aMid, aNew], { file: "src/a.ts", tokenBudget: budget });
+  assert.deepEqual(
+    result.atoms.map((a) => a.loreId),
+    ["new1"],
+    "once mid is dropped, older level-0 atoms drop too — no silent hole in the chain"
+  );
+  assert.equal(result.truncated, true);
+});
+
+test("recall keeps a cheap level-1 rollup even after level-0 selection closes", async () => {
+  const t = (d: string) => `2026-05-0${d}T00:00:00.000Z`;
+  const rollup = {
+    id: "r1",
+    loreId: "r1",
+    level: 1 as const,
+    summary: "old history, compressed",
+    files: ["src/a.ts"],
+    sourceIds: ["x", "y"],
+    createdAt: t("1"),
+  };
+  const aMid = mkAtom({ id: "mid1", loreId: "mid1", createdAt: t("2"), summary: "m ".repeat(300) });
+  const aNew = mkAtom({ id: "new1", loreId: "new1", createdAt: t("3"), summary: "n ".repeat(600) });
+  const budget = atomTokens(aNew) + atomTokens(rollup) + 1;
+  assert.ok(atomTokens(aNew) + atomTokens(aMid) > budget, "mid genuinely overflows");
+
+  const result = recall([rollup, aMid, aNew], { file: "src/a.ts", tokenBudget: budget });
+  assert.deepEqual(
+    result.atoms.map((a) => a.loreId),
+    ["r1", "new1"],
+    "the rollup covers the old arc and is kept; only level-0 selection closed"
+  );
+});
+
+test("recall keeps an atom whose cost lands exactly on the budget boundary", async () => {
+  const a = mkAtom({ id: "a", loreId: "aaaa1111", createdAt: "2026-05-01T00:00:00.000Z" });
+  const b = mkAtom({ id: "b", loreId: "bbbb2222", createdAt: "2026-05-02T00:00:00.000Z" });
+  const exact = atomTokens(a) + atomTokens(b);
+  const result = recall([a, b], { file: "src/a.ts", tokenBudget: exact });
+  assert.equal(result.atoms.length, 2, "== budget is within budget");
+  assert.equal(result.truncated, false);
+});
+
+test("recent(n) reports the n-cap as limited, never as budget truncation", async () => {
+  const atoms = await buildChain();
+  const result = recall(atoms, { recent: 2, tokenBudget: 100000 });
+  assert.equal(result.limited, true, "stopped at the requested n");
+  assert.equal(result.truncated, false, "the budget was never under pressure");
+});
+
+test("recent(n) under a tight budget reports truncated, not limited", async () => {
+  const atoms = await buildChain();
+  const tight = atomTokens(atoms[0]) + 1;
+  const result = recall(atoms, { recent: 3, tokenBudget: tight });
+  assert.equal(result.truncated, true);
+  assert.equal(result.limited, false);
+});
