@@ -1,14 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { openDecision, recordEdit, consolidate, consolidateGraph } from "../src/capture/index.js";
-import { readAllAtoms } from "../src/store/index.js";
-import { atomsForFile } from "../src/mcp/graph.js";
+import { readAllAtoms, writeNote, type NotePayload } from "../src/store/index.js";
+import { atomsForFile } from "../src/read/graph.js";
 import { recall, isRollupAtom, atomTokens, type Complete } from "../src/engine/index.js";
+import { gitC, makeRepo as sharedMakeRepo } from "./helpers/repo.js";
 
 /**
  * The "dream" — global store compaction. Builds a multi-commit graph, then
@@ -16,18 +15,7 @@ import { recall, isRollupAtom, atomTokens, type Complete } from "../src/engine/i
  * coverage is preserved (nothing a file needs is lost).
  */
 
-function gitC(repo: string, args: string[], input?: string): string {
-  return execFileSync("git", args, { cwd: repo, input, encoding: "utf8" }).trim();
-}
-
-function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "cairn-dream-"));
-  gitC(repo, ["init", "-q"]);
-  gitC(repo, ["config", "user.email", "t@cairn.dev"]);
-  gitC(repo, ["config", "user.name", "T"]);
-  gitC(repo, ["commit", "-q", "--allow-empty", "-m", "root"]);
-  return repo;
-}
+const makeRepo = () => sharedMakeRepo({ prefix: "cairn-dream-" });
 
 const fake: Complete = async (prompt) => {
   if (prompt.includes("Cluster them")) return JSON.stringify({ clusters: [] });
@@ -103,6 +91,11 @@ test("the dream folds a deleted-file atom before a live one, and never persists 
   gitC(repo, ["rm", "-q", "gone.ts"]);
   gitC(repo, ["commit", "-q", "-m", "chore: drop gone.ts"]);
 
+  // Capture the doomed atom's identity BEFORE the dream folds it away.
+  const goneAtom = readAllAtoms(repo)
+    .map((e) => e.atom)
+    .find((a) => a.files.includes("gone.ts"))!;
+
   // Budget with room for exactly one verbatim atom, forcing a choice. Use the
   // LARGEST atom's cost so the budget is independent of note-listing order and
   // of whether linkSupersedes added a (size-bearing) supersedes line.
@@ -117,7 +110,8 @@ test("the dream folds a deleted-file atom before a live one, and never persists 
   const stored = readAllAtoms(repo).map((x) => x.atom);
   const covered = new Set(stored.filter(isRollupAtom).flatMap((r) => r.sourceIds));
   const goneSurvivesVerbatim = stored.some((a) => !isRollupAtom(a) && a.files.includes("gone.ts"));
-  assert.ok(!goneSurvivesVerbatim || covered.size > 0, "gone.ts reasoning was folded, not kept ahead of live");
+  assert.equal(goneSurvivesVerbatim, false, "gone.ts reasoning was folded, not kept ahead of live");
+  assert.ok(covered.has(goneAtom.loreId), "a rollup's provenance covers the folded gone.ts atom");
 
   // The derived flag never reached the notes store.
   for (const { atom } of readAllAtoms(repo)) {
@@ -156,6 +150,62 @@ test("the dream keeps a reverted decision verbatim over an older live one, and p
   for (const { atom } of readAllAtoms(repo)) {
     assert.equal(atom.stale, undefined);
     assert.equal(atom.reverted, undefined);
+  }
+});
+
+test("the dream counts a duplicated loreId once and leaves no zombie copy behind", async () => {
+  const repo = makeRepo();
+
+  // Three decisions across three commits.
+  const files = ["a.ts", "b.ts", "c.ts"];
+  for (let i = 0; i < files.length; i++) {
+    const now = `2026-05-${10 + i}T00:00:00.000Z`;
+    openDecision(repo, `decision ${i} about ${files[i]}`, [], now);
+    writeFileSync(join(repo, files[i]), `// rev ${i}\n`);
+    recordEdit(repo, { toolName: "Write", filePath: join(repo, files[i]), reason: `change ${i}`, ts: now });
+    gitC(repo, ["add", "-A"]);
+    gitC(repo, ["commit", "-q", "-m", `feat: ${files[i]} #${i}`]);
+    await consolidate(repo, fake, { now });
+  }
+  assert.equal(readAllAtoms(repo).length, 3, "three level-0 atoms across three commit notes");
+
+  // Orphaned duplicate (post-crash artifact): the SAME atom — same loreId —
+  // written into a note on a SECOND commit that has no Cairn note of its own.
+  const dup = readAllAtoms(repo).find((e) => e.atom.files.includes("a.ts"))!;
+  writeFileSync(join(repo, "extra.ts"), "// host commit for the duplicate note\n");
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "chore: extra commit"]);
+  const dupCommit = gitC(repo, ["rev-parse", "HEAD"]);
+  const payload: NotePayload = {
+    v: 1,
+    commit: dupCommit,
+    generatedAt: dup.atom.createdAt,
+    loreId: dup.atom.loreId,
+    atoms: [dup.atom],
+  };
+  writeNote(dupCommit, payload, repo);
+  assert.equal(readAllAtoms(repo).length, 4, "four physical copies, three unique loreIds");
+
+  // Dream with a tiny budget so the store must fold.
+  const result = await consolidateGraph(repo, fake, { budget: 10, now: "2026-06-01T00:00:00.000Z" });
+  assert.equal(result.ok, true);
+  assert.equal(result.before, 3, "the duplicated atom is counted ONCE for budget purposes");
+  assert.ok(result.rollups >= 1, "produced rollup(s)");
+
+  // The zombie case — one copy pruned, the other surviving in a different note,
+  // re-entering every later read — must be impossible. If the atom was folded
+  // into a rollup, ZERO physical copies remain; if it was kept verbatim,
+  // exactly ONE remains.
+  const after = readAllAtoms(repo);
+  const verbatim = after.filter((e) => !isRollupAtom(e.atom) && e.atom.loreId === dup.atom.loreId);
+  const covered = after
+    .filter((e) => isRollupAtom(e.atom))
+    .some((e) => e.atom.sourceIds.includes(dup.atom.id));
+  assert.ok(verbatim.length <= 1, "never more than one physical copy survives the dream");
+  if (covered) {
+    assert.equal(verbatim.length, 0, "folded atom leaves no verbatim copy in ANY note");
+  } else {
+    assert.equal(verbatim.length, 1, "kept-verbatim atom survives as exactly one physical copy");
   }
 });
 

@@ -9,16 +9,19 @@ import {
 } from "../engine/index.js";
 import {
   repoRoot,
-  headSha,
+  headShaIfAny,
   readEntries,
   readDecisions,
-  clearJournal,
+  consumeEntries,
   readAllAtoms,
   readNote,
   writeNote,
   removeNote,
   appendTrailersToCommit,
   emitTrailers,
+  oneLine,
+  readCommitTrailers,
+  writeLastConsolidatedHead,
   type JournalEntry,
   type LoreRecord,
   type NotePayload,
@@ -69,6 +72,12 @@ export async function consolidate(
     return { ok: true, reason: "empty-journal", written: 0, amended: false };
   }
 
+  // A repo with zero commits has no HEAD to consolidate against. Bail BEFORE
+  // any model call is spent; the journal is untouched (nothing was consumed),
+  // so the first real commit's trigger picks everything up.
+  const sha = headShaIfAny(root);
+  if (!sha) return { ok: false, reason: "no-head", written: 0, amended: false };
+
   const now = opts.now ?? new Date().toISOString();
   const decisions = readDecisions(root);
 
@@ -100,19 +109,28 @@ export async function consolidate(
   });
 
   // 4. Build a single commit-level Lore record (exactly one Lore-id per commit).
-  const record = buildLoreRecord(newAtoms);
+  //    The record is the UNION of everything consolidated against this commit:
+  //    the new atoms, any decision atoms already noted on it (a prior
+  //    consolidation or notes-only flush at the same HEAD), and any trailer
+  //    block already on the message (the only survivor of a dream-pruned note).
+  //    It is built from PRE-compaction atoms so a within-run rollup can never
+  //    drop a decision's constraints from the permanent record.
+  const existingNote = readNote(sha, root);
+  const notedDecisions = (existingNote?.atoms ?? []).filter(isDecisionAtom);
+  const recordAtoms = mergeAtomsByLoreId(notedDecisions, newAtoms).filter(isDecisionAtom);
+  const record = unionLoreRecords(buildLoreRecord(recordAtoms), readCommitTrailers(sha, root));
 
   // 5. At a commit, amend Lore trailers onto it (guarded). At a non-commit
   //    inflection point, leave the message alone and only update the notes graph.
-  const sha = headSha(root);
   const { amended, sha: noteSha } = writeTrailers
     ? appendTrailersToCommit(sha, emitTrailers(record), root)
     : { amended: false, sha };
 
   // A commit's note is the UNION of all decisions consolidated against it,
-  // deduped by Lore-id. Merge with any existing note so a later notes-only flush
-  // (or re-consolidation) adds to the commit's record instead of clobbering it.
-  const existingNote = noteSha === sha ? readNote(noteSha, root) : null;
+  // deduped by Lore-id. The existing note was read from the PRE-amend sha
+  // (amending rewrites the commit; its note does not move with it) and merged
+  // here, so a re-consolidation ADDS to the commit's record — it never clobbers
+  // atoms a prior consolidation or flush already recorded.
   const payload: NotePayload = {
     v: 1,
     commit: noteSha,
@@ -121,11 +139,23 @@ export async function consolidate(
     atoms: mergeAtomsByLoreId(existingNote?.atoms ?? [], compactedNew),
   };
   writeNote(noteSha, payload, root);
-  // The amend rewrote the commit; any note on the pre-amend sha is now orphaned.
+  // The pre-amend note is merged into the payload above; the orphan can go.
   if (amended && noteSha !== sha) removeNote(sha, root);
 
-  // 6. The journal has been promoted to durable records; clear it.
-  clearJournal(root);
+  // 6. Promote-then-consume: remove exactly the entries read at step 0 —
+  //    anything appended while the model ran survives for the next trigger.
+  consumeEntries(root, new Set(entries.map((e) => e.id)));
+
+  // Remember where HEAD ended up so the commit-trigger gate can tell a real
+  // new commit from a fresh-looking HEAD that never moved. Consolidation has
+  // already fully succeeded by here, so a failed pointer write must not
+  // propagate — worst case the next trigger re-runs a redundant amend that
+  // short-circuits as already-current (a no-op).
+  try {
+    writeLastConsolidatedHead(root, noteSha);
+  } catch (err) {
+    process.stderr.write(`cairn: failed to record last consolidated head: ${String(err)}\n`);
+  }
 
   return {
     ok: true,
@@ -139,7 +169,12 @@ export async function consolidate(
 const CONFIDENCE_RANK: Record<Confidence, number> = { low: 0, medium: 1, high: 2 };
 
 function buildLoreRecord(atoms: DecisionAtom[]): LoreRecord {
-  const constraints = [...new Set(atoms.flatMap((a) => a.constraints))];
+  // Constraints round-trip through the trailer block via oneLine() (whitespace
+  // collapsed), so dedupe in that same normalized space — otherwise a
+  // multi-line constraint ("a\nb") and its trailer form ("a b") read as
+  // distinct and accumulate duplicate Constraint lines across amends. Atom
+  // content in notes stays raw.
+  const constraints = [...new Set(atoms.flatMap((a) => a.constraints).map(oneLine))];
   const rejected = uniqueRejected(atoms.flatMap((a) => a.rejected));
   // Conservative: the commit is only as settled as its least-settled decision.
   const confidence = atoms.reduce<Confidence>(
@@ -151,6 +186,35 @@ function buildLoreRecord(atoms: DecisionAtom[]): LoreRecord {
   // Never emit a self-referential Supersedes (semantically invalid in Lore).
   const supersedes = [...new Set(atoms.flatMap((a) => a.supersedes))].filter((s) => s !== loreId);
   return { loreId, constraints, rejected, confidence, supersedes };
+}
+
+/**
+ * Union a freshly built record with the trailer record already on the commit.
+ * The amend REPLACES the old block, so anything not carried forward here is
+ * gone from the permanent record. The trailer is the only place a decision
+ * survives once a dream prunes its atom from the note — this union is what
+ * makes the block monotone under re-consolidation and crash-retry.
+ */
+function unionLoreRecords(record: LoreRecord, prior: LoreRecord | null): LoreRecord {
+  if (!prior) return record;
+  return {
+    loreId: record.loreId,
+    // Same oneLine() normalization as buildLoreRecord: the prior side was read
+    // back from trailers (already collapsed), the new side may not be.
+    constraints: [...new Set([...prior.constraints, ...record.constraints].map(oneLine))],
+    rejected: uniqueRejected([...prior.rejected, ...record.rejected]),
+    // Conservative both ways: the commit is only as settled as its
+    // least-settled record, old or new.
+    confidence:
+      CONFIDENCE_RANK[prior.confidence] < CONFIDENCE_RANK[record.confidence]
+        ? prior.confidence
+        : record.confidence,
+    // Commit-level record ids are replacements, not decision lineage — keep
+    // them out of Supersedes.
+    supersedes: [...new Set([...prior.supersedes, ...record.supersedes])].filter(
+      (s) => s !== record.loreId && s !== prior.loreId
+    ),
+  };
 }
 
 function linkSupersedes(atom: DecisionAtom, existing: DecisionAtom[]): void {
@@ -181,7 +245,9 @@ function uniqueRejected(rs: Rejected[]): Rejected[] {
   const seen = new Set<string>();
   const out: Rejected[] = [];
   for (const r of rs) {
-    const key = r.alternative.toLowerCase();
+    // oneLine for the same reason as constraints: the trailer round-trip
+    // collapses whitespace, so compare alternatives in that normalized space.
+    const key = oneLine(r.alternative).toLowerCase();
     if (!r.alternative || seen.has(key)) continue;
     seen.add(key);
     out.push(r);

@@ -10,10 +10,11 @@
  * (scripts/verify-cairn.workflow.js) — run that for a deeper, narrated audit.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanEngineDir, assertChildProcessConfinedTo, tsFiles } from "./lib/engine-imports.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 let failures = 0;
@@ -38,13 +39,6 @@ function assert(label, cond, detail = "") {
   cond ? pass(label, detail) : fail(label, detail);
 }
 
-function tsFiles(dir) {
-  return readdirSync(dir).flatMap((n) => {
-    const p = join(dir, n);
-    return statSync(p).isDirectory() ? tsFiles(p) : n.endsWith(".ts") ? [p] : [];
-  });
-}
-
 console.log("\n\x1b[1mCairn — local verification\x1b[0m\n");
 
 // --- 1. Build + test + smoke (the behavioral gates) ---
@@ -56,17 +50,11 @@ if (m) assert("  all tests pass", m[2] === "0", `${m[1]} pass, ${m[2]} fail`);
 
 run("smoke: real MCP server over stdio (why/recent)", ["node", "scripts/smoke.mjs"]);
 
-// --- 2. Engine decoupling (allowlist: engine may import ONLY its own ./ modules) ---
-const specOf = (l) =>
-  (l.match(/\bfrom\s*["']([^"']+)["']/) || l.match(/\bimport\s*\(\s*["']([^"']+)["']/) ||
-   l.match(/\brequire\(\s*["']([^"']+)["']/) || l.match(/^\s*import\s+["']([^"']+)["']/) || [])[1] ?? null;
-const engineViolations = tsFiles(join(ROOT, "src", "engine")).flatMap((f) =>
-  readFileSync(f, "utf8").split("\n")
-    .filter((l) => /^\s*import\b/.test(l) || /^\s*export\b[^;]*\bfrom\b/.test(l) || /\bimport\s*\(/.test(l) || /\brequire\(/.test(l))
-    .map(specOf).filter((s) => s && !s.startsWith("./"))
-    .map((s) => `${f}: imports "${s}"`)
-);
+// --- 2. Engine decoupling (AST allowlist shared with tests/decoupling.test.ts) ---
+const engineViolations = scanEngineDir(join(ROOT, "src", "engine")).flatMap((e) => e.violations);
 assert("engine imports only its own ./ modules (no git/CC/store/SDK)", engineViolations.length === 0, engineViolations[0] || "");
+const cpViolations = assertChildProcessConfinedTo(join(ROOT, "src"), "store/git.ts");
+assert("child_process confined to store/git.ts", cpViolations.length === 0, cpViolations[0] || "");
 
 // --- 3. Read surface = exactly why + recent (non-goal: no search/summary) ---
 const server = readFileSync(join(ROOT, "src", "mcp", "server.ts"), "utf8");

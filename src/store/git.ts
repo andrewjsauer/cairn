@@ -74,6 +74,11 @@ export function headSha(cwd: string): string {
   return git(["rev-parse", "HEAD"], { cwd });
 }
 
+/** HEAD sha, or null when there is none — a probe that never prints git's "fatal:" to the inherited stderr. */
+export function headShaIfAny(cwd: string): string | null {
+  return git(["rev-parse", "HEAD"], { cwd, allowFail: true }) || null;
+}
+
 /**
  * The git "empty tree" object, written into the object DB so a note can attach
  * to it. Cairn uses it as a stable anchor for the compacted rollup ledger — it
@@ -109,6 +114,16 @@ export function commitMessage(sha: string, cwd: string): string {
 /** ISO author date for a commit. */
 export function commitDate(sha: string, cwd: string): string {
   return git(["show", "-s", "--format=%aI", sha], { cwd, allowFail: true });
+}
+
+/**
+ * ISO committer date for a commit. Distinct from %aI on purpose: `git commit
+ * --date`, cherry-picks, and rebases override the AUTHOR date while the
+ * committer date stays honest — the commit-trigger recency gate needs the
+ * honest one.
+ */
+export function committerDate(sha: string, cwd: string): string {
+  return git(["show", "-s", "--format=%cI", sha], { cwd, allowFail: true });
 }
 
 /**

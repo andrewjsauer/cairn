@@ -31,7 +31,7 @@ export interface LoreRecord {
 }
 
 /** Trailer values must be single logical lines; collapse whitespace/newlines. */
-function oneLine(s: string): string {
+export function oneLine(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
@@ -44,7 +44,13 @@ export function emitTrailers(record: LoreRecord): string {
     lines.push(`Rejected: ${oneLine(r.alternative)}${reason ? ` | ${reason}` : ""}`);
   }
   lines.push(`Confidence: ${record.confidence}`);
-  for (const s of record.supersedes) lines.push(`Supersedes: ${s}`);
+  // Supersedes is the one value emitted without oneLine(). Its only legitimate
+  // shape is an 8-char content-hash id; anything else can only come from a
+  // crafted/foreign note, and a newline there could forge a trailer line — so
+  // drop anything that doesn't match instead of emitting it.
+  for (const s of record.supersedes) {
+    if (/^[0-9a-f]{8}$/.test(s)) lines.push(`Supersedes: ${s}`);
+  }
   return lines.join("\n");
 }
 
@@ -140,9 +146,10 @@ export function parseTrailers(message: string): LoreRecord | null {
 /**
  * Remove Cairn's own trailers from the trailing block so a re-amend REPLACES
  * rather than appends them (guaranteeing exactly one Lore-id). Foreign trailers
- * in the same block (Signed-off-by, Co-authored-by, …) are preserved.
+ * in the same block (Signed-off-by, Co-authored-by, …) are preserved verbatim,
+ * including their RFC-822 folded continuation lines.
  */
-function stripCairnTrailers(message: string): string {
+export function stripCairnTrailers(message: string): string {
   const lines = message.replace(/\r/g, "").split("\n");
   const bounds = trailerBlockBounds(lines);
   if (!bounds) return message;
@@ -150,9 +157,14 @@ function stripCairnTrailers(message: string): string {
   const block = lines.slice(start, end);
   if (!block.some((l) => /^Lore-id:/.test(l))) return message; // nothing of ours
 
+  // Track which trailer the current line belongs to: a folded continuation
+  // (non-trailer line) is dropped only when it continues a Cairn trailer;
+  // foreign trailers keep their first line AND their continuations verbatim.
+  let inCairnTrailer = false;
   const kept = block.filter((l) => {
     const m = l.match(TRAILER_RE);
-    return m ? !CAIRN_KEYS.has(m[1]) : false; // drop Cairn keys + any folded conts
+    if (m) inCairnTrailer = CAIRN_KEYS.has(m[1]);
+    return !inCairnTrailer;
   });
   const rebuilt = [...lines.slice(0, start), ...kept].join("\n").replace(/\s+$/, "");
   return rebuilt;
@@ -170,8 +182,10 @@ export function readCommitTrailers(sha: string, cwd: string): LoreRecord | null 
  * (there is no native git-commit hook in Claude Code — Section 11). It rewrites
  * the commit, so we GUARD it and skip the amend (relying on the git-note alone,
  * which never rewrites history) when amending would be wrong:
- *   - the commit is already on a remote-tracking branch, or
- *   - the commit is GPG/SSH-signed (re-signing without consent is not ours to do).
+ *   - the commit is already on a remote-tracking branch,
+ *   - the commit is GPG/SSH-signed (re-signing without consent is not ours to do), or
+ *   - HEAD has moved off `sha` since it was captured (amend rewrites HEAD, and
+ *     a concurrent commit's message is not ours to replace).
  *
  * When we do amend, we REPLACE any existing Cairn trailer block rather than
  * appending, so a re-consolidation never produces a second Lore-id. Returns the
@@ -197,7 +211,35 @@ export function appendTrailersToCommit(
   }
   // Replace (not append) any prior Cairn block -> exactly one Lore-id per commit.
   const body = stripCairnTrailers(existing).replace(/\s+$/, "");
-  const message = `${body}\n\n${block}\n`;
-  git(["commit", "--amend", "--no-edit", "-F", "-"], { cwd, input: message });
+  // If the body already ENDS in a trailer block (foreign trailers like
+  // Signed-off-by that survived the strip), our lines must JOIN that block —
+  // a blank line here would make Cairn's block the only "final block" and
+  // demote the foreign trailers to plain body text in git's eyes
+  // (`interpret-trailers --parse` would no longer report them). bounds[0] > 0
+  // keeps a subject line that happens to look like "key: value" from being
+  // absorbed into the block.
+  const bodyLines = body.split("\n");
+  const bounds = trailerBlockBounds(bodyLines);
+  const bodyEndsInTrailers = bounds !== null && bounds[1] === bodyLines.length && bounds[0] > 0;
+  const message = `${body}${bodyEndsInTrailers ? "\n" : "\n\n"}${block}\n`;
+  // HEAD may have moved since `sha` (and the guards above) were evaluated —
+  // model calls ran in between, and `--amend` rewrites whatever HEAD is NOW.
+  // Refuse rather than silently replace a concurrent commit's message. The
+  // note still lands keyed on the pre-move sha, which is the right home: that
+  // is the commit the consolidated reasoning belongs to.
+  const headNow = git(["rev-parse", "HEAD"], { cwd, allowFail: true });
+  if (headNow !== sha) {
+    return { amended: false, reason: "head-moved", sha };
+  }
+  // --only with no pathspec amends the MESSAGE against HEAD's tree, never the
+  // index — staged-but-uncommitted work must not be folded into the rewrite.
+  // --no-verify: the tree already passed the user's hooks when the commit was
+  // made; re-running them against a message-only amend can only break it.
+  // --allow-empty: a message-only rewrite of an empty commit stays empty —
+  // without it git rejects the amend ("No changes") and consolidation fails.
+  git(
+    ["commit", "--amend", "--only", "--allow-empty", "--no-edit", "--no-verify", "-F", "-"],
+    { cwd, input: message }
+  );
   return { amended: true, sha: git(["rev-parse", "HEAD"], { cwd }) };
 }

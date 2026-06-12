@@ -101,7 +101,7 @@ No new capture format. No agent-memory platform, conversation memory, or general
 The hook/MCP/Lore/git-notes details were resolved against current documentation before any wiring was written, because guessing names or schemas would have made the interop fake:
 
 - **Claude Code hooks**: there is no native commit or plan-mode-entry event. A commit is detected via `PostToolUse` on `Bash` matching `git commit`; a decision is auto-opened via `PostToolUse` on the `ExitPlanMode` tool (the plan is approved → work begins), reading `tool_input.plan`. The `PostToolUse` payload carries `tool_name` / `tool_input.file_path` but **no reason** (hence the transcript-tail snapshot). Pre-compaction / session end / session start use the `PreCompact`, `SessionEnd`, and `SessionStart` events for notes-only flushes. `${CLAUDE_PLUGIN_ROOT}` / `${CLAUDE_PROJECT_DIR}` are substituted into hook commands and exported to the process.
-- **MCP workspace path**: Claude Code sets `CLAUDE_PROJECT_DIR` in the spawned stdio server's environment; `roots/list` is the documented fallback. Plugin MCP configs substitute `${CLAUDE_PROJECT_DIR}` directly.
+- **MCP workspace path**: Claude Code sets `CLAUDE_PROJECT_DIR` in the spawned stdio server's environment; Cairn reads it and falls back to the server's own working directory when absent. (MCP `roots/list` is the documented protocol-level alternative; Cairn does not implement it.) Plugin MCP configs substitute `${CLAUDE_PROJECT_DIR}` directly.
 - **Lore trailers**: exact keys/casing/cardinality and the pipe-separated `Rejected` value, from the canonical Lore repo.
 - **Git notes**: `--ref=cairn` → `refs/notes/cairn`; keyed by object SHA; not fetched/pushed by default.
 

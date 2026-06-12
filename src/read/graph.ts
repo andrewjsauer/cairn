@@ -15,7 +15,10 @@ import {
 } from "../store/index.js";
 
 /**
- * Read-side graph assembly for the MCP tools.
+ * Delivery-agnostic read-side graph assembly: notes ∪ trailers merge, Lore-id
+ * dedupe, staleness/revert annotation. Consumed by the MCP server today and by
+ * any future surface (a CLI command, a note cache) — the planned process-level
+ * note cache drops in at this seam.
  *
  * Two sources, merged and de-duplicated by Lore-id:
  *   1. The compacted graph in refs/notes/cairn (Cairn's own atoms).
@@ -27,9 +30,7 @@ import {
  */
 
 export function allAtoms(cwd: string): Atom[] {
-  const entries = dedupe(readAllAtoms(cwd));
-  annotateReverted(entries, cwd);
-  return annotateStale(entries.map((e) => e.atom), cwd);
+  return annotateEntries(dedupeByLoreId(readAllAtoms(cwd)), cwd);
 }
 
 export function atomsForFile(
@@ -60,15 +61,31 @@ export function atomsForFile(
     if (record) fromTrailers.push({ atom: trailerToAtom(record, sha, cwd), commit: sha });
   }
 
-  const entries = dedupe([...fromNotes, ...fromTrailers]);
+  return annotateEntries(dedupeByLoreId([...fromNotes, ...fromTrailers]), cwd, renames);
+}
+
+/**
+ * The ONE annotation composition: stale, then reverted (the documented order
+ * from the revert plan — they mutate disjoint flags in place, so the order is
+ * a convention, not a dependency). Both the read path above and the dream
+ * (src/capture/dream.ts) run annotation through here, so they can never drift.
+ * Returns the annotated atoms.
+ */
+export function annotateEntries(
+  entries: AtomEntry[],
+  cwd: string,
+  renames?: Map<string, string>
+): Atom[] {
+  const atoms = annotateStale(entries.map((e) => e.atom), cwd, renames);
   annotateReverted(entries, cwd);
-  return annotateStale(entries.map((e) => e.atom), cwd, renames);
+  return atoms;
 }
 
 /** Keep one entry per Lore-id (the newest atom wins, and its commit is the one
  *  later annotated), so a note atom and its own commit trailer don't show up
- *  twice. */
-function dedupe(entries: AtomEntry[]): AtomEntry[] {
+ *  twice. Shared with the dream, whose budget counting must agree with what a
+ *  read would actually surface. */
+export function dedupeByLoreId(entries: AtomEntry[]): AtomEntry[] {
   const byId = new Map<string, AtomEntry>();
   for (const entry of entries) {
     const prior = byId.get(entry.atom.loreId);

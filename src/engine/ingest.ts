@@ -134,10 +134,15 @@ async function inferClusters(
       const clusters: RawObservation[][] = [];
       const seen = new Set<string>();
       for (const ids of parsed.clusters) {
+        // Mark each id as seen AT ACCEPTANCE so a model that repeats an id —
+        // within one cluster or across clusters — never maps it twice.
         const members = ids
           .map((id) => byId.get(id))
-          .filter((o): o is RawObservation => Boolean(o) && !seen.has(o!.id));
-        members.forEach((m) => seen.add(m.id));
+          .filter((o): o is RawObservation => {
+            if (!o || seen.has(o.id)) return false;
+            seen.add(o.id);
+            return true;
+          });
         if (members.length) clusters.push(members);
       }
       // Any observation the model dropped becomes its own cluster.

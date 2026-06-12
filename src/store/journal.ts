@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  appendFileSync,
+  renameSync,
+} from "node:fs";
 import { join } from "node:path";
 import { gitDir } from "./git.js";
 
@@ -38,6 +45,7 @@ interface CairnPaths {
   journal: string;
   decisions: string;
   active: string;
+  lastHead: string;
 }
 
 function paths(cwd: string): CairnPaths {
@@ -47,6 +55,7 @@ function paths(cwd: string): CairnPaths {
     journal: join(dir, "journal.jsonl"),
     decisions: join(dir, "decisions.json"),
     active: join(dir, "active-decision"),
+    lastHead: join(dir, "last-head"),
   };
 }
 
@@ -79,10 +88,59 @@ export function readEntries(cwd: string): JournalEntry[] {
   return entries;
 }
 
-/** Clear the edit journal after it has been consolidated into durable records. */
-export function clearJournal(cwd: string): void {
+/**
+ * Remove exactly the consumed entries from the journal, preserving anything
+ * appended while consolidation ran (its model calls take seconds — a parallel
+ * hook's entry landing in that window must survive, or "a missed trigger
+ * loses nothing" breaks). The journal is re-read fresh at clear time; a line
+ * is kept when its id was not consumed, and unparseable lines are kept too —
+ * a torn write is not ours to delete. Same-directory temp + rename so a crash
+ * mid-clear can never tear the surviving lines; the temp name carries the pid
+ * so two concurrent consolidations cannot rename over each other. The
+ * sub-millisecond window between re-read and rename is accepted: closing it
+ * needs locking, and a hook that can block the session is worse than a rare
+ * re-consolidated entry (atom ids are content hashes, so re-consolidation is
+ * idempotent anyway).
+ */
+export function consumeEntries(cwd: string, consumed: Set<string>): void {
   const p = paths(cwd);
-  if (existsSync(p.journal)) rmSync(p.journal);
+  if (!existsSync(p.journal)) return;
+  const kept: string[] = [];
+  for (const line of readFileSync(p.journal, "utf8").split("\n")) {
+    if (!line) continue;
+    let id: string | undefined;
+    try {
+      id = (JSON.parse(line) as JournalEntry).id;
+    } catch {
+      kept.push(line); // torn write: preserve, never delete
+      continue;
+    }
+    if (!id || !consumed.has(id)) kept.push(line);
+  }
+  const tmp = `${p.journal}.tmp.${process.pid}`;
+  writeFileSync(tmp, kept.length ? kept.join("\n") + "\n" : "", "utf8");
+  renameSync(tmp, p.journal);
+}
+
+// ---- last consolidated HEAD ----
+
+/**
+ * The HEAD sha observed at the end of the last successful consolidation.
+ * The commit-trigger gate uses it to reject the "fresh timestamp but HEAD
+ * never moved" shape (`git commit || true` seconds after a real commit):
+ * recency alone is not proof a NEW commit exists.
+ */
+export function readLastConsolidatedHead(cwd: string): string | null {
+  const p = paths(cwd);
+  if (!existsSync(p.lastHead)) return null;
+  const sha = readFileSync(p.lastHead, "utf8").trim();
+  return sha || null;
+}
+
+export function writeLastConsolidatedHead(cwd: string, sha: string): void {
+  const p = paths(cwd);
+  ensureDir(p.dir);
+  writeFileSync(p.lastHead, sha, "utf8");
 }
 
 // ---- decisions registry + active pointer ----
@@ -100,7 +158,11 @@ export function readDecisions(cwd: string): Record<string, DecisionRecord> {
 function writeDecisions(cwd: string, decisions: Record<string, DecisionRecord>): void {
   const p = paths(cwd);
   ensureDir(p.dir);
-  writeFileSync(p.decisions, JSON.stringify(decisions, null, 2), "utf8");
+  // Temp + rename: a crash mid-write must not corrupt the whole registry
+  // (readDecisions would silently degrade every attached entry to {}).
+  const tmp = `${p.decisions}.tmp.${process.pid}`;
+  writeFileSync(tmp, JSON.stringify(decisions, null, 2), "utf8");
+  renameSync(tmp, p.decisions);
 }
 
 export function getActiveDecisionId(cwd: string): string | null {

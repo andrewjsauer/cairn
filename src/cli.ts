@@ -25,8 +25,17 @@ import {
   lastAssistantText,
 } from "./capture/index.js";
 import { makeComplete } from "./complete.js";
+import {
+  repoRoot,
+  headSha,
+  committerDate,
+  readLastConsolidatedHead,
+} from "./store/index.js";
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+
+/** How fresh HEAD's committer timestamp must be for the recency fallback. */
+const COMMIT_RECENCY_WINDOW_MS = 120_000;
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
@@ -75,11 +84,22 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+interface ToolOutcome {
+  stdout?: string;
+  stderr?: string;
+  exit_code?: number;
+}
+
 interface HookPayload {
   cwd?: string;
   transcript_path?: string;
   tool_name?: string;
   tool_input?: { file_path?: string; command?: string; plan?: string };
+  // Claude Code delivers the tool's result under `tool_output` (current docs)
+  // — `tool_response` kept as a tolerated older spelling. Every field is
+  // optional; the gate fails toward notes-only when anything is missing.
+  tool_output?: ToolOutcome;
+  tool_response?: ToolOutcome;
 }
 
 async function parseHookInput(): Promise<HookPayload> {
@@ -120,7 +140,49 @@ async function cmdConsolidateIfCommit(): Promise<void> {
   const payload = await parseHookInput();
   const command = payload.tool_input?.command ?? "";
   if (payload.tool_name !== "Bash" || !isGitCommit(command)) return;
-  await runConsolidate(projectDir(payload.cwd));
+  // Trailers are only amended when the command REALLY created the commit now
+  // at HEAD; otherwise demote to a notes-only flush (journal still promoted,
+  // no commit message touched, the next real commit picks everything up).
+  await runConsolidate(projectDir(payload.cwd), commitLandedOnHead(payload));
+}
+
+/**
+ * Gate for the commit trigger (Review C3): the command text alone is not
+ * proof a commit was created. PostToolUse fires after the WHOLE compound
+ * command — which can exit 0 without committing (`git commit || true`), fail
+ * mid-chain, or commit in a different repo (`cd sub && git commit`). Amending
+ * on a false positive rewrites the PREVIOUS, unrelated commit.
+ *
+ * Checks, all against the repo that would be consolidated:
+ *   1. the payload's exit code, when present, must be 0;
+ *   2. the summary line git prints ("[branch abc1234] …", first non-empty
+ *      stdout line) must name the current HEAD; failing that (quiet commits,
+ *      thin payloads), HEAD's committer timestamp must be fresh AND HEAD must
+ *      differ from the last sha Cairn consolidated — recency alone is not
+ *      proof, because Cairn's own amend keeps the timestamp fresh.
+ * Any error fails toward notes-only: never amend on uncertainty.
+ * Exported for testing.
+ */
+export function commitLandedOnHead(payload: HookPayload): boolean {
+  try {
+    const outcome = payload.tool_output ?? payload.tool_response;
+    if (typeof outcome?.exit_code === "number" && outcome.exit_code !== 0) return false;
+    const root = repoRoot(projectDir(payload.cwd));
+    if (!root) return false;
+    const head = headSha(root);
+    const summary = (outcome?.stdout ?? "").split("\n").find((l) => l.trim() !== "") ?? "";
+    // Covers "[main abc1234]", "[main (root-commit) abc1234]", "[detached HEAD abc1234]".
+    // Anchored to the line start so a sha-like string inside a commit MESSAGE
+    // echoed later in stdout can't be mistaken for git's summary line.
+    const short = summary.match(/^\[.+?([0-9a-f]{7,40})\]/)?.[1];
+    if (short) return head.startsWith(short);
+    const committed = Date.parse(committerDate(head, root));
+    const fresh =
+      Number.isFinite(committed) && Math.abs(Date.now() - committed) <= COMMIT_RECENCY_WINDOW_MS;
+    return fresh && head !== readLastConsolidatedHead(root);
+  } catch {
+    return false;
+  }
 }
 
 async function cmdFlush(): Promise<void> {
@@ -158,16 +220,19 @@ async function cmdConsolidate(): Promise<void> {
 /**
  * Match a real `git commit` that CREATES a commit. Anchored per command segment
  * so it does not fire on `git commit-graph`, `git log | grep commit`, or a
- * trailing `# commit` comment, and excludes `--amend` (rewrites, doesn't create)
- * and `--dry-run`. Exported for testing.
+ * trailing `# commit` comment. The `--amend` (rewrites, doesn't create) and
+ * `--dry-run` exclusions apply only to the MATCHED segment with quoted spans
+ * removed — a commit whose message merely mentions "--amend", or a sibling
+ * segment that amends, must not mask a real commit. (`git -C dir commit` and
+ * `git -c k=v commit` are accepted misses: the journal survives to the next
+ * trigger.) Exported for testing.
  */
 export function isGitCommit(command: string): boolean {
-  if (/--amend\b/.test(command) || /--dry-run\b/.test(command)) return false;
-  // Split on shell segment separators and require a segment that starts with
-  // `git commit` followed by end-or-whitespace (so `commit-graph` won't match).
-  return command
-    .split(/&&|\|\||[;|&\n]/)
-    .some((seg) => /^\s*git\s+commit(\s|$)/.test(seg));
+  return command.split(/&&|\|\||[;|&\n]/).some((seg) => {
+    if (!/^\s*git\s+commit(\s|$)/.test(seg)) return false;
+    const unquoted = seg.replace(/"[^"]*"|'[^']*'/g, "");
+    return !/\s--amend\b/.test(unquoted) && !/\s--dry-run\b/.test(unquoted);
+  });
 }
 
 async function runConsolidate(cwd: string, writeTrailers = true): Promise<void> {

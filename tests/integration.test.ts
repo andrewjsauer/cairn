@@ -1,15 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { openDecision, recordEdit, consolidate } from "../src/capture/index.js";
 import { readEntries, renamesInHistory } from "../src/store/index.js";
-import { atomsForFile, allAtoms } from "../src/mcp/graph.js";
+import { atomsForFile, allAtoms } from "../src/read/graph.js";
 import { formatChain } from "../src/mcp/format.js";
 import { recall, type Complete } from "../src/engine/index.js";
+import { gitC, makeRepo as sharedMakeRepo } from "./helpers/repo.js";
 
 /**
  * Full slice against a real git repo, with a fake complete() (no network):
@@ -18,18 +17,7 @@ import { recall, type Complete } from "../src/engine/index.js";
  * version of the Section 10 acceptance criteria.
  */
 
-function gitC(repo: string, args: string[], input?: string): string {
-  return execFileSync("git", args, { cwd: repo, input, encoding: "utf8" }).trim();
-}
-
-function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "cairn-it-"));
-  gitC(repo, ["init", "-q"]);
-  gitC(repo, ["config", "user.email", "test@cairn.dev"]);
-  gitC(repo, ["config", "user.name", "Cairn Test"]);
-  gitC(repo, ["commit", "-q", "--allow-empty", "-m", "root"]);
-  return repo;
-}
+const makeRepo = () => sharedMakeRepo({ prefix: "cairn-it-" });
 
 const fakeComplete: Complete = async (prompt) => {
   if (prompt.includes("Cluster them")) return JSON.stringify({ clusters: [] });
@@ -271,3 +259,130 @@ test("revert detection: a bare git revert flags the decision; revert-of-revert c
 // Keeps tsc/eslint from flagging the import in environments without it.
 void existsSync;
 void readFileSync;
+
+// --- M6: end-to-end no-key fallback through the REAL makeComplete() adapter ---
+
+import { makeComplete } from "../src/complete.js";
+import { isDecisionAtom } from "../src/engine/index.js";
+
+test("M6: consolidation without ANTHROPIC_API_KEY falls back to the recorded intent", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-28T10:00:00.000Z";
+  const saved = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    // Built AFTER the key is gone: this is the throwing stub the CLI would get.
+    const complete = makeComplete();
+
+    openDecision(repo, "use exponential backoff for flaky network calls", [], now);
+    writeFileSync(join(repo, "net.ts"), "export const call = () => {};\n");
+    recordEdit(repo, { toolName: "Write", filePath: join(repo, "net.ts"), reason: "added backoff", ts: now });
+    gitC(repo, ["add", "-A"]);
+    gitC(repo, ["commit", "-q", "-m", "feat: backoff"]);
+
+    const result = await consolidate(repo, complete, { now });
+    assert.equal(result.ok, true, "no key is degraded service, not failure");
+    assert.equal(result.written, 1);
+
+    const atoms = atomsForFile(repo, "net.ts").filter(isDecisionAtom);
+    assert.equal(atoms.length, 1);
+    assert.equal(
+      atoms[0].intent,
+      "use exponential backoff for flaky network calls",
+      "deterministic fallback preserves the recorded decision intent"
+    );
+  } finally {
+    if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
+  }
+});
+
+// --- M10: a repo with zero commits has no HEAD — consolidate must bail cleanly ---
+
+test("M10: consolidate in a commit-less repo returns no-head, spends no model call, keeps the journal", async () => {
+  const repo = sharedMakeRepo({ prefix: "cairn-it-", rootCommit: false });
+  const now = "2026-05-28T11:00:00.000Z";
+  openDecision(repo, "first ever decision", [], now);
+  writeFileSync(join(repo, "a.ts"), "x\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "a.ts"), reason: "r", ts: now });
+
+  let modelCalled = false;
+  const spy: Complete = async () => {
+    modelCalled = true;
+    throw new Error("must not be called");
+  };
+  const result = await consolidate(repo, spy, { now });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "no-head");
+  assert.equal(result.written, 0);
+  assert.equal(result.amended, false);
+  assert.equal(modelCalled, false, "the guard fires BEFORE any model latency is spent");
+  assert.equal(readEntries(repo).length, 1, "journal intact for the first real commit's trigger");
+});
+
+// --- M7: a same-decision follow-up records supersedes end-to-end ---
+
+test("M7: a superseding decision links, lands a Supersedes trailer, and renders in formatChain", async () => {
+  const repo = makeRepo();
+
+  // Synthesis echoes the stated intent; decision B is low-confidence and
+  // returns two rejected alternatives differing only by case.
+  const echoRetry: Complete = async (prompt) => {
+    if (prompt.includes("Cluster them")) return JSON.stringify({ clusters: [] });
+    if (prompt.startsWith("Summarize these related decisions")) return JSON.stringify({ summary: "rollup" });
+    const intent = prompt.match(/^Stated intent: (.+)$/m)?.[1] ?? "unknown";
+    const jitter = intent.includes("jitter");
+    return JSON.stringify({
+      intent,
+      summary: `Decided to ${intent}.`,
+      constraints: ["upstream is flaky on cold start"],
+      rejected: jitter
+        ? [
+            { alternative: "Fixed Delay", reason: "thundering herd" },
+            { alternative: "fixed delay", reason: "duplicate differing only by case" },
+          ]
+        : [{ alternative: "no retry at all", reason: "spurious errors" }],
+      confidence: jitter ? "low" : "high",
+    });
+  };
+
+  // Decision A on client.ts.
+  const nowA = "2026-05-29T10:00:00.000Z";
+  openDecision(repo, "retry transient upstream failures twice", [], nowA);
+  writeFileSync(join(repo, "client.ts"), "// retry x2\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "client.ts"), reason: "retry x2", ts: nowA });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: retry"]);
+  await consolidate(repo, echoRetry, { now: nowA });
+
+  // Decision B revisits the SAME file with overlapping reasoning.
+  const nowB = "2026-05-30T10:00:00.000Z";
+  openDecision(repo, "retry transient upstream failures with jitter", [], nowB);
+  writeFileSync(join(repo, "client.ts"), "// retry with jitter\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "client.ts"), reason: "add jitter", ts: nowB });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: jitter"]);
+  await consolidate(repo, echoRetry, { now: nowB });
+
+  // The newer atom supersedes the older one in the graph.
+  const atoms = atomsForFile(repo, "client.ts").filter(isDecisionAtom);
+  assert.equal(atoms.length, 2);
+  const older = atoms.find((a) => a.intent.includes("twice"))!;
+  const newer = atoms.find((a) => a.intent.includes("jitter"))!;
+  assert.ok(
+    newer.supersedes.includes(older.loreId),
+    `newer atom's supersedes [${newer.supersedes}] names the older lore-id ${older.loreId}`
+  );
+
+  // The new commit's trailers carry the link, the case-deduped Rejected, and
+  // the commit-level confidence reduced to the LOWEST member confidence.
+  const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  assert.match(message, new RegExp(`^Supersedes: ${older.loreId}$`, "m"));
+  assert.match(message, /^Confidence: low$/m, "commit confidence reduces to the lowest member");
+  const rejectedLines = message.match(/^Rejected: /gm) ?? [];
+  assert.equal(rejectedLines.length, 1, "case-only duplicate alternatives dedupe to one line");
+  assert.match(message, /^Rejected: Fixed Delay \| thundering herd$/m);
+
+  // And the read side renders the evolution.
+  const why = recall(atomsForFile(repo, "client.ts"), { file: "client.ts", tokenBudget: 4000 });
+  assert.match(formatChain("client.ts", why), new RegExp(`supersedes: .*${older.loreId}`));
+});

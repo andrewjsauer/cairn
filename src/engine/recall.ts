@@ -36,7 +36,7 @@ export function recall(atoms: Atom[], query: RecallQuery): RecallResult {
   if (query.recent !== undefined) {
     return recallRecent(atoms, query.recent, query.tokenBudget);
   }
-  return { atoms: [], tokensUsed: 0, truncated: false };
+  return { atoms: [], tokensUsed: 0, truncated: false, limited: false };
 }
 
 /** why(file): chain for a file, chronological, oldest dropped first under budget. */
@@ -49,16 +49,26 @@ function recallChain(
   const chain = atoms.filter((a) => touchesFile(a, file, renames)).sort(byCreatedAsc);
 
   // Walk newest -> oldest accumulating cost; keep whatever fits, then re-sort
-  // chronologically for presentation. Rollups are cheap and cover old history,
-  // so this naturally preserves the long arc while trimming old detail.
+  // chronologically for presentation. Once a level-0 atom does not fit, all
+  // OLDER level-0 atoms are dropped too — a cheaper old atom slipping past a
+  // dropped newer one would leave a silent hole in the middle of the chain
+  // (and supersedes links pointing at records the reader can't see). Level-1
+  // rollups stay exempt: they are cheap and compress old history, which is
+  // what preserves the long arc while trimming old detail.
   const kept: Atom[] = [];
   let used = 0;
   let truncated = false;
+  let level0Closed = false;
   for (let i = chain.length - 1; i >= 0; i--) {
     const atom = chain[i];
+    if (atom.level === 0 && level0Closed) {
+      truncated = true;
+      continue;
+    }
     const cost = atomTokens(atom);
     if (used + cost > budget && kept.length > 0) {
       truncated = true;
+      if (atom.level === 0) level0Closed = true;
       continue;
     }
     kept.push(atom);
@@ -68,7 +78,7 @@ function recallChain(
   // We always keep at least one atom even if it alone exceeds the budget
   // ("always return something"); report that honestly as truncated.
   if (used > budget) truncated = true;
-  return { atoms: kept, tokensUsed: used, truncated };
+  return { atoms: kept, tokensUsed: used, truncated, limited: false };
 }
 
 /** recent(n): latest N decisions across the graph, newest first, under budget. */
@@ -81,9 +91,13 @@ function recallRecent(
   const kept: Atom[] = [];
   let used = 0;
   let truncated = false;
+  let limited = false;
   for (const atom of newestFirst) {
     if (kept.length >= n) {
-      truncated = true;
+      // Stopping at the requested n is NOT budget pressure — report it as
+      // `limited` so the rendered message never claims trimming that didn't
+      // happen.
+      limited = true;
       break;
     }
     const cost = atomTokens(atom);
@@ -95,5 +109,5 @@ function recallRecent(
     used += cost;
   }
   if (used > budget) truncated = true; // first atom alone may exceed the budget
-  return { atoms: kept, tokensUsed: used, truncated };
+  return { atoms: kept, tokensUsed: used, truncated, limited };
 }

@@ -6,9 +6,9 @@ argument-hint: "<intent>"
 ---
 
 ```!
-node "${CLAUDE_SKILL_DIR}/../../dist/cli.js" open-decision-stdin <<'CAIRN_INTENT_EOF'
+node "${CLAUDE_SKILL_DIR}/../../dist/cli.js" open-decision-stdin <<'CAIRN_EOF_6fbb5abbb981ffcf5e266ad6'
 $ARGUMENTS
-CAIRN_INTENT_EOF
+CAIRN_EOF_6fbb5abbb981ffcf5e266ad6
 ```
 
 A Cairn decision is now open. Until the next decision opens (or the session ends), the files you edit are journaled under this decision in `.git/cairn/`. On your next commit, Cairn folds that journal into a Lore-compatible decision record on the commit message and into the `refs/notes/cairn` graph, so a future session can ask `why(<file>)` and get this reasoning back.

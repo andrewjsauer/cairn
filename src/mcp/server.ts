@@ -4,7 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { recall } from "../engine/index.js";
 import { repoRoot, repoRelativePath, renamesInHistory } from "../store/index.js";
-import { allAtoms, atomsForFile } from "./graph.js";
+import { allAtoms, atomsForFile } from "../read/graph.js";
 import { formatChain, formatRecent } from "./format.js";
 import { RECALL_TOKEN_BUDGET, DEFAULT_RECENT } from "../config.js";
 
@@ -13,9 +13,10 @@ import { RECALL_TOKEN_BUDGET, DEFAULT_RECENT } from "../config.js";
  *
  * Resolving the active repo (Section 11): a user/plugin-level stdio server is
  * spawned once, so it cannot assume its process.cwd() is the session's repo.
- * Claude Code sets CLAUDE_PROJECT_DIR in the server's environment (and a server
- * may also call roots/list). We resolve in that order, then `git rev-parse` from
- * there to get the repo root — and we re-resolve on every call so the answer
+ * Claude Code guarantees CLAUDE_PROJECT_DIR in the spawned server's environment,
+ * so we resolve from that, falling back to the process cwd (roots/list is the
+ * protocol-level alternative; Cairn does not implement it). Then `git rev-parse`
+ * from there gets the repo root — and we re-resolve on every call so the answer
  * tracks the active workspace rather than wherever the server happened to start.
  */
 
