@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { netRevertedShas, type RevertEdge } from "../src/engine/index.js";
 import { revertEdgesInHistory } from "../src/store/index.js";
+import { gitC, makeRepo as sharedMakeRepo } from "./helpers/repo.js";
 
 /**
  * Revert detection: the pure net-status resolver (engine, no git) and the
@@ -47,17 +47,7 @@ test("netRevertedShas: empty edges -> empty set", () => {
 
 // --- edge extraction from real git -------------------------------------------
 
-function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "cairn-revert-"));
-  execFileSync("git", ["init", "-q"], { cwd: repo });
-  execFileSync("git", ["config", "user.email", "t@cairn.dev"], { cwd: repo });
-  execFileSync("git", ["config", "user.name", "T"], { cwd: repo });
-  return repo;
-}
-
-function gitC(repo: string, args: string[]): string {
-  return execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
-}
+const makeRepo = () => sharedMakeRepo({ prefix: "cairn-revert-", rootCommit: false });
 
 test("revertEdgesInHistory: standard revert yields a full-SHA edge", () => {
   const repo = makeRepo();
@@ -82,7 +72,12 @@ test("revertEdgesInHistory: --reference abbreviated SHA resolves via prefix", ()
   // --reference writes "This reverts commit <abbrev> (subject, date)."
   execFileSync("git", ["revert", "--no-edit", "--reference", "HEAD"], {
     cwd: repo,
-    env: { ...process.env, GIT_EDITOR: "true" },
+    env: {
+      ...process.env,
+      GIT_EDITOR: "true",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_SYSTEM: "/dev/null",
+    },
   });
 
   const edges = revertEdgesInHistory(repo);

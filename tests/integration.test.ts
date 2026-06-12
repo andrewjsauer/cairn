@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { openDecision, recordEdit, consolidate } from "../src/capture/index.js";
@@ -10,6 +8,7 @@ import { readEntries, renamesInHistory } from "../src/store/index.js";
 import { atomsForFile, allAtoms } from "../src/mcp/graph.js";
 import { formatChain } from "../src/mcp/format.js";
 import { recall, type Complete } from "../src/engine/index.js";
+import { gitC, makeRepo as sharedMakeRepo } from "./helpers/repo.js";
 
 /**
  * Full slice against a real git repo, with a fake complete() (no network):
@@ -18,18 +17,7 @@ import { recall, type Complete } from "../src/engine/index.js";
  * version of the Section 10 acceptance criteria.
  */
 
-function gitC(repo: string, args: string[], input?: string): string {
-  return execFileSync("git", args, { cwd: repo, input, encoding: "utf8" }).trim();
-}
-
-function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "cairn-it-"));
-  gitC(repo, ["init", "-q"]);
-  gitC(repo, ["config", "user.email", "test@cairn.dev"]);
-  gitC(repo, ["config", "user.name", "Cairn Test"]);
-  gitC(repo, ["commit", "-q", "--allow-empty", "-m", "root"]);
-  return repo;
-}
+const makeRepo = () => sharedMakeRepo({ prefix: "cairn-it-" });
 
 const fakeComplete: Complete = async (prompt) => {
   if (prompt.includes("Cluster them")) return JSON.stringify({ clusters: [] });

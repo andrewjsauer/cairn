@@ -1,12 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { isStale, resolveRename, type DecisionAtom, type RollupAtom } from "../src/engine/index.js";
 import { filesAtHead, renamesInHistory, annotateStale, writeNote, readNote } from "../src/store/index.js";
+import { gitC, makeRepo as sharedMakeRepo } from "./helpers/repo.js";
 
 /**
  * Structural staleness: the pure rule (engine, no git) plus the HEAD snapshot
@@ -71,20 +70,14 @@ test("isStale: rollup with one live file -> not stale", () => {
 
 // --- the HEAD snapshot -----------------------------------------------------
 
-function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "cairn-stale-"));
-  execFileSync("git", ["init", "-q"], { cwd: repo });
-  execFileSync("git", ["config", "user.email", "t@cairn.dev"], { cwd: repo });
-  execFileSync("git", ["config", "user.name", "T"], { cwd: repo });
-  return repo;
-}
+const makeRepo = () => sharedMakeRepo({ prefix: "cairn-stale-", rootCommit: false });
 
 test("filesAtHead: returns exactly the tracked paths", () => {
   const repo = makeRepo();
   writeFileSync(join(repo, "a.ts"), "1\n");
   writeFileSync(join(repo, "b.ts"), "2\n");
-  execFileSync("git", ["add", "."], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  gitC(repo, ["add", "."]);
+  gitC(repo, ["commit", "-q", "-m", "init"]);
 
   const live = filesAtHead(repo);
   assert.deepEqual([...live].sort(), ["a.ts", "b.ts"]);
@@ -95,10 +88,10 @@ test("filesAtHead: a deleted-and-committed path is absent", () => {
   const repo = makeRepo();
   writeFileSync(join(repo, "a.ts"), "1\n");
   writeFileSync(join(repo, "b.ts"), "2\n");
-  execFileSync("git", ["add", "."], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
-  execFileSync("git", ["rm", "-q", "a.ts"], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "drop a"], { cwd: repo });
+  gitC(repo, ["add", "."]);
+  gitC(repo, ["commit", "-q", "-m", "init"]);
+  gitC(repo, ["rm", "-q", "a.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "drop a"]);
 
   const live = filesAtHead(repo);
   assert.equal(live.has("a.ts"), false);
@@ -119,8 +112,8 @@ test("filesAtHead: empty repo with no HEAD -> empty set, no throw", () => {
 test("filesAtHead: non-ASCII path matches verbatim (no core.quotepath C-quoting)", () => {
   const repo = makeRepo();
   writeFileSync(join(repo, "café.ts"), "1\n");
-  execFileSync("git", ["add", "."], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  gitC(repo, ["add", "."]);
+  gitC(repo, ["commit", "-q", "-m", "init"]);
 
   const live = filesAtHead(repo);
   assert.equal(live.has("café.ts"), true, "raw UTF-8 name present, not C-quoted");
@@ -154,12 +147,12 @@ test("isStale: a renamed-but-live file rescues the atom", () => {
 test("renamesInHistory: parses git mv history, newest rename wins per old path", () => {
   const repo = makeRepo();
   writeFileSync(join(repo, "a.ts"), "content\n");
-  execFileSync("git", ["add", "."], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
-  execFileSync("git", ["mv", "a.ts", "b.ts"], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "a -> b"], { cwd: repo });
-  execFileSync("git", ["mv", "b.ts", "c.ts"], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "b -> c"], { cwd: repo });
+  gitC(repo, ["add", "."]);
+  gitC(repo, ["commit", "-q", "-m", "init"]);
+  gitC(repo, ["mv", "a.ts", "b.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "a -> b"]);
+  gitC(repo, ["mv", "b.ts", "c.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "b -> c"]);
 
   const renames = renamesInHistory(repo);
   assert.equal(renames.get("a.ts"), "b.ts");
@@ -173,14 +166,14 @@ test("renamesInHistory: parses git mv history, newest rename wins per old path",
 test("renamesInHistory: a renamed-away path that was RECREATED is its own canonical name", () => {
   const repo = makeRepo();
   writeFileSync(join(repo, "a.ts"), "original\n");
-  execFileSync("git", ["add", "."], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
-  execFileSync("git", ["mv", "a.ts", "b.ts"], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "a -> b"], { cwd: repo });
+  gitC(repo, ["add", "."]);
+  gitC(repo, ["commit", "-q", "-m", "init"]);
+  gitC(repo, ["mv", "a.ts", "b.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "a -> b"]);
   // Recreate a.ts as a brand-new, unrelated file.
   writeFileSync(join(repo, "a.ts"), "totally new content\n");
-  execFileSync("git", ["add", "a.ts"], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "new a.ts"], { cwd: repo });
+  gitC(repo, ["add", "a.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "new a.ts"]);
 
   const renames = renamesInHistory(repo);
   // a.ts is live at HEAD, so it must NOT resolve to b.ts — otherwise the new
@@ -194,8 +187,8 @@ test("renamesInHistory: empty for a repo with no renames (and no HEAD)", () => {
   const repo = makeRepo();
   assert.equal(renamesInHistory(repo).size, 0); // no HEAD
   writeFileSync(join(repo, "a.ts"), "1\n");
-  execFileSync("git", ["add", "."], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  gitC(repo, ["add", "."]);
+  gitC(repo, ["commit", "-q", "-m", "init"]);
   assert.equal(renamesInHistory(repo).size, 0); // history, no renames
   rmSync(repo, { recursive: true, force: true });
 });
@@ -204,11 +197,11 @@ test("annotateStale: rename rescue — renamed file not stale, deleted file stay
   const repo = makeRepo();
   writeFileSync(join(repo, "moved.ts"), "will move\n");
   writeFileSync(join(repo, "dead.ts"), "will die\n");
-  execFileSync("git", ["add", "."], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
-  execFileSync("git", ["mv", "moved.ts", "renamed.ts"], { cwd: repo });
-  execFileSync("git", ["rm", "-q", "dead.ts"], { cwd: repo });
-  execFileSync("git", ["commit", "-q", "-m", "move + delete"], { cwd: repo });
+  gitC(repo, ["add", "."]);
+  gitC(repo, ["commit", "-q", "-m", "init"]);
+  gitC(repo, ["mv", "moved.ts", "renamed.ts"]);
+  gitC(repo, ["rm", "-q", "dead.ts"]);
+  gitC(repo, ["commit", "-q", "-m", "move + delete"]);
 
   const movedAtom = decisionAtom(["moved.ts"]);
   const deadAtom = decisionAtom(["dead.ts"]);
@@ -234,8 +227,8 @@ test("annotateStale: empty live set (no HEAD / git failure) annotates nothing", 
 
 test("writeNote strips the derived `stale` and `reverted` flags before serializing", () => {
   const repo = makeRepo();
-  execFileSync("git", ["commit", "-q", "--allow-empty", "-m", "root"], { cwd: repo });
-  const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
+  gitC(repo, ["commit", "-q", "--allow-empty", "-m", "root"]);
+  const sha = gitC(repo, ["rev-parse", "HEAD"]);
 
   const live = decisionAtom(["live.ts"]);
   live.stale = false;
@@ -247,7 +240,7 @@ test("writeNote strips the derived `stale` and `reverted` flags before serializi
   writeNote(sha, { v: 1, commit: sha, generatedAt: "2026-06-01T00:00:00.000Z", loreId: "x", atoms: [live, dead] }, repo);
 
   // raw JSON carries neither derived key, and parsed atoms have them undefined
-  const raw = execFileSync("git", ["notes", "--ref=cairn", "show", sha], { cwd: repo, encoding: "utf8" });
+  const raw = gitC(repo, ["notes", "--ref=cairn", "show", sha]);
   assert.equal(raw.includes("\"stale\""), false);
   assert.equal(raw.includes("\"reverted\""), false);
   const payload = readNote(sha, repo);

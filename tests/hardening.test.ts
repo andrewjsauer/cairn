@@ -16,8 +16,12 @@ import {
 import { getActiveDecisionId, getDecision, readEntries } from "../src/store/journal.js";
 import { parseTrailers } from "../src/store/trailers.js";
 import { listNotes } from "../src/store/notes.js";
+import { isSignedCommit } from "../src/store/git.js";
 import { atomsForFile } from "../src/mcp/graph.js";
 import type { Complete } from "../src/engine/index.js";
+import { gitC, makeRepo as sharedMakeRepo, fake, fakeEcho, tsxCliArgs } from "./helpers/repo.js";
+
+const makeRepo = () => sharedMakeRepo({ prefix: "cairn-hard-" });
 
 /** Tests that lock in the code-review hardening fixes. */
 
@@ -151,55 +155,6 @@ test("parseTrailers splits Rejected on the first pipe only", () => {
   assert.equal(parsed!.rejected[0].alternative, "use A|B fallback");
   assert.equal(parsed!.rejected[0].reason, "too slow");
 });
-
-// --- integration helpers ---
-
-function gitC(repo: string, args: string[], input?: string): string {
-  return execFileSync("git", args, { cwd: repo, input, encoding: "utf8" }).trim();
-}
-
-function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "cairn-hard-"));
-  gitC(repo, ["init", "-q"]);
-  gitC(repo, ["config", "user.email", "t@cairn.dev"]);
-  gitC(repo, ["config", "user.name", "T"]);
-  gitC(repo, ["commit", "-q", "--allow-empty", "-m", "root"]);
-  return repo;
-}
-
-const fake: Complete = async (prompt) => {
-  if (prompt.includes("Cluster them")) return JSON.stringify({ clusters: [] });
-  if (prompt.startsWith("Summarize these related decisions")) return JSON.stringify({ summary: "r" });
-  return JSON.stringify({
-    intent: "i",
-    summary: "s",
-    constraints: ["c"],
-    rejected: [{ alternative: "a", reason: "why" }],
-    confidence: "high",
-  });
-};
-
-// A fake that makes decisions distinguishable: synthesis echoes the recorded
-// intent (or the cluster's file) into the constraint, so tests can assert WHICH
-// decisions survive a merge — not just how many.
-const fakeEcho: Complete = async (prompt) => {
-  if (prompt.includes("Cluster them")) {
-    const ids = [...prompt.matchAll(/id=(j-[0-9a-f]+)/g)].map((m) => m[1]);
-    return JSON.stringify({ clusters: ids.map((id) => [id]) });
-  }
-  if (prompt.startsWith("Summarize these related decisions")) {
-    return JSON.stringify({ summary: "rollup summary" });
-  }
-  const intent = prompt.match(/^Stated intent: (.+)$/m)?.[1];
-  const which = intent ?? `file:${prompt.match(/file=(\S+)/)?.[1] ?? "unknown"}`;
-  return JSON.stringify({
-    intent: which,
-    summary: `s ${which}`,
-    constraints: [`c-${which}`],
-    rejected: [{ alternative: `alt-${which}`, reason: "why" }],
-    confidence: "high",
-  });
-};
 
 // --- #2 / C1: re-consolidating the same HEAD MERGES — prior decisions survive ---
 
@@ -424,6 +379,67 @@ test("a rejecting commit-msg hook does not block the trailer amend", async () =>
   assert.ok(/^Lore-id:/m.test(message), "trailers landed despite the hook");
 });
 
+// --- amend guards: never rewrite a pushed or signed commit; the note alone carries the reasoning ---
+
+test("on-remote guard: a pushed commit is never amended, but the note still lands on HEAD", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "pushed work", [], now);
+  writeFileSync(join(repo, "p.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "p.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: p"]);
+
+  // Push HEAD to a bare remote BEFORE consolidation runs: the commit is now
+  // public history, so the amend must be refused.
+  const bare = mkdtempSync(join(tmpdir(), "cairn-hard-remote-"));
+  gitC(bare, ["init", "--bare", "-q"]);
+  gitC(repo, ["remote", "add", "origin", bare]);
+  gitC(repo, ["push", "-q", "-u", "origin", "HEAD"]);
+
+  const headBefore = gitC(repo, ["rev-parse", "HEAD"]);
+  const result = await consolidate(repo, fake, { now });
+  assert.equal(result.amended, false, "pushed commit is never amended");
+  assert.equal(gitC(repo, ["rev-parse", "HEAD"]), headBefore, "HEAD sha untouched");
+  // The git-note alone carries the reasoning (README's guarantee).
+  assert.ok(gitC(repo, ["notes", "--ref=cairn", "show", "HEAD"]).length > 0, "note exists on HEAD");
+});
+
+test("signed guard: a signed commit is never amended, but the note still lands on HEAD", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+
+  // Throwaway SSH signing key — repo-local config only (gitC nulls global/system).
+  const keyDir = mkdtempSync(join(tmpdir(), "cairn-hard-key-"));
+  execFileSync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", join(keyDir, "key"), "-q"]);
+  gitC(repo, ["config", "gpg.format", "ssh"]);
+  gitC(repo, ["config", "user.signingkey", join(keyDir, "key")]);
+  gitC(repo, ["config", "commit.gpgsign", "true"]);
+  // gpg.ssh semantics: %G? reports "N" for an SSH-signed commit unless an
+  // allowedSignersFile lets git VERIFY it — so configure one for the test key.
+  const pub = readFileSync(join(keyDir, "key.pub"), "utf8").trim().split(" ").slice(0, 2).join(" ");
+  writeFileSync(join(keyDir, "allowed_signers"), `t@cairn.dev ${pub}\n`);
+  gitC(repo, ["config", "gpg.ssh.allowedSignersFile", join(keyDir, "allowed_signers")]);
+
+  openDecision(repo, "signed work", [], now);
+  writeFileSync(join(repo, "s.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "s.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: s"]);
+
+  const headBefore = gitC(repo, ["rev-parse", "HEAD"]);
+  assert.equal(isSignedCommit(headBefore, repo), true, "the commit really is signed");
+
+  const result = await consolidate(repo, fake, { now });
+  assert.equal(result.amended, false, "signed commit is never amended");
+  assert.equal(gitC(repo, ["rev-parse", "HEAD"]), headBefore, "HEAD sha untouched");
+  assert.ok(gitC(repo, ["notes", "--ref=cairn", "show", "HEAD"]).length > 0, "note exists on HEAD");
+
+  // And the detector itself: an unsigned commit elsewhere is NOT signed.
+  const plain = makeRepo();
+  assert.equal(isSignedCommit(gitC(plain, ["rev-parse", "HEAD"]), plain), false);
+});
+
 // --- inbound Lore interop: a foreign trailer (no Cairn note) is read by why() ---
 
 test("atomsForFile reads a Lore record written by another tool (no Cairn note)", () => {
@@ -463,9 +479,10 @@ test("readNote-backed reads ignore a future note schema version", () => {
 
 test("open-decision-stdin stores a metachar-laden intent verbatim", () => {
   const repo = makeRepo();
-  const cli = join(process.cwd(), "dist", "cli.js");
+  // Run the CLI from SOURCE (via tsx) so this test can never green-light a stale dist/.
   const evil = "retry logic; touch PWNED && echo $(whoami) `id`";
-  const r = spawnSync("node", [cli, "open-decision-stdin"], { cwd: repo, input: evil, encoding: "utf8" });
+  const [cmd, args] = tsxCliArgs("open-decision-stdin");
+  const r = spawnSync(cmd, args, { cwd: repo, input: evil, encoding: "utf8" });
   assert.equal(r.status, 0);
   const id = getActiveDecisionId(repo);
   assert.ok(id);

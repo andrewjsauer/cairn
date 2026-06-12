@@ -1,14 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { openDecision, recordEdit, consolidate, consolidateGraph } from "../src/capture/index.js";
 import { readAllAtoms } from "../src/store/index.js";
 import { atomsForFile } from "../src/mcp/graph.js";
 import { recall, isRollupAtom, atomTokens, type Complete } from "../src/engine/index.js";
+import { gitC, makeRepo as sharedMakeRepo } from "./helpers/repo.js";
 
 /**
  * The "dream" — global store compaction. Builds a multi-commit graph, then
@@ -16,18 +15,7 @@ import { recall, isRollupAtom, atomTokens, type Complete } from "../src/engine/i
  * coverage is preserved (nothing a file needs is lost).
  */
 
-function gitC(repo: string, args: string[], input?: string): string {
-  return execFileSync("git", args, { cwd: repo, input, encoding: "utf8" }).trim();
-}
-
-function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "cairn-dream-"));
-  gitC(repo, ["init", "-q"]);
-  gitC(repo, ["config", "user.email", "t@cairn.dev"]);
-  gitC(repo, ["config", "user.name", "T"]);
-  gitC(repo, ["commit", "-q", "--allow-empty", "-m", "root"]);
-  return repo;
-}
+const makeRepo = () => sharedMakeRepo({ prefix: "cairn-dream-" });
 
 const fake: Complete = async (prompt) => {
   if (prompt.includes("Cluster them")) return JSON.stringify({ clusters: [] });
