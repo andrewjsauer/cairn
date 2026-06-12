@@ -20,6 +20,7 @@ import {
   appendTrailersToCommit,
   emitTrailers,
   readCommitTrailers,
+  writeLastConsolidatedHead,
   type JournalEntry,
   type LoreRecord,
   type NotePayload,
@@ -137,6 +138,10 @@ export async function consolidate(
 
   // 6. The journal has been promoted to durable records; clear it.
   clearJournal(root);
+
+  // Remember where HEAD ended up so the commit-trigger gate can tell a real
+  // new commit from a fresh-looking HEAD that never moved.
+  writeLastConsolidatedHead(root, noteSha);
 
   return {
     ok: true,

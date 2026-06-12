@@ -112,6 +112,16 @@ export function commitDate(sha: string, cwd: string): string {
 }
 
 /**
+ * ISO committer date for a commit. Distinct from %aI on purpose: `git commit
+ * --date`, cherry-picks, and rebases override the AUTHOR date while the
+ * committer date stays honest — the commit-trigger recency gate needs the
+ * honest one.
+ */
+export function committerDate(sha: string, cwd: string): string {
+  return git(["show", "-s", "--format=%cI", sha], { cwd, allowFail: true });
+}
+
+/**
  * The set of repo-relative paths tracked at HEAD. One git call; staleness is
  * then pure set membership (an atom is stale when none of its files are here).
  * Returns an empty set for an empty repo / no HEAD — callers must treat "no

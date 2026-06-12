@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { spawnSync } from "node:child_process";
-import { isGitCommit } from "../src/cli.js";
+import { isGitCommit, commitLandedOnHead } from "../src/cli.js";
 import {
   openDecision,
   openDecisionFromPlan,
@@ -31,6 +31,101 @@ test("isGitCommit matches a real commit but not amend/decoys", () => {
   assert.equal(isGitCommit("git commit-graph write"), false, "commit-graph is not commit");
   assert.equal(isGitCommit("git log | grep commit"), false, "substring decoy");
   assert.equal(isGitCommit("echo 'time to commit'"), false);
+});
+
+test("isGitCommit scopes exclusions to the matched segment, outside quotes", () => {
+  // A commit MESSAGE that mentions --amend is still a real commit.
+  assert.equal(isGitCommit('git commit -m "fix --amend detection in isGitCommit"'), true);
+  assert.equal(isGitCommit("git commit -m 'document --dry-run behavior'"), true);
+  // A SIBLING segment that amends does not mask the real commit…
+  assert.equal(isGitCommit("git commit -m 'x'; git commit --amend --no-edit"), true);
+  // …and an amend alone is still excluded.
+  assert.equal(isGitCommit("git add -A && git commit --amend"), false);
+  // Documented accepted misses (deferred trigger, journal survives):
+  assert.equal(isGitCommit("git -C sub commit -m 'x'"), false);
+  assert.equal(isGitCommit("git -c user.name=x commit -m 'x'"), false);
+});
+
+// --- C3: the commit-trigger gate — only amend when a commit REALLY landed ---
+
+test("commitLandedOnHead accepts only proof that HEAD is the new commit", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  const payload = (over: object) => ({
+    cwd: repo,
+    tool_name: "Bash",
+    tool_input: { command: "git commit -m x" },
+    ...over,
+  });
+
+  // A failed command never consolidates with trailers.
+  assert.equal(commitLandedOnHead(payload({ tool_output: { exit_code: 1 } })), false, "non-zero exit");
+
+  // Success stdout naming HEAD's sha: positive proof.
+  const head = gitC(repo, ["rev-parse", "HEAD"]);
+  const short = head.slice(0, 7);
+  assert.equal(
+    commitLandedOnHead(payload({ tool_output: { exit_code: 0, stdout: `[main ${short}] feat: x\n 1 file changed` } })),
+    true,
+    "summary line matching HEAD"
+  );
+  assert.equal(
+    commitLandedOnHead(payload({ tool_output: { exit_code: 0, stdout: `[main (root-commit) ${short}] root` } })),
+    true,
+    "root-commit summary shape"
+  );
+  assert.equal(
+    commitLandedOnHead(payload({ tool_output: { exit_code: 0, stdout: `[detached HEAD ${short}] x` } })),
+    true,
+    "detached HEAD summary shape"
+  );
+
+  // A summary line naming a DIFFERENT sha (commit happened elsewhere — the
+  // `cd sub && git commit` shape): reject.
+  assert.equal(
+    commitLandedOnHead(payload({ tool_output: { exit_code: 0, stdout: "[main 1234567] other repo's commit" } })),
+    false,
+    "summary sha not at this repo's HEAD"
+  );
+
+  // No stdout sha: fresh committer time + HEAD unseen by Cairn → accept.
+  writeFileSync(join(repo, "g.ts"), "1\n");
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: g"]);
+  assert.equal(
+    commitLandedOnHead(payload({ tool_output: { exit_code: 0, stdout: "" } })),
+    true,
+    "quiet commit: recency + HEAD moved"
+  );
+
+  // After consolidation records last-head, the same fresh-looking HEAD is no
+  // longer proof: `git commit || true` right after a real commit must demote.
+  openDecision(repo, "gate", [], now);
+  writeFileSync(join(repo, "g.ts"), "2\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "g.ts"), reason: "r", ts: now });
+  await consolidate(repo, fakeEcho, { now });
+  assert.equal(
+    commitLandedOnHead(payload({ tool_input: { command: "git commit -m x || true" }, tool_output: { exit_code: 0, stdout: "" } })),
+    false,
+    "fresh timestamp but HEAD == last consolidated sha"
+  );
+
+  // A sha-like bracket line buried in stdout (an echoed commit message) is
+  // NOT git's summary line and cannot act as positive proof: with recency
+  // exhausted, the decoy must not flip the gate back open.
+  const consolidatedHead = gitC(repo, ["rev-parse", "HEAD"]).slice(0, 7);
+  assert.equal(
+    commitLandedOnHead(
+      payload({
+        tool_output: { exit_code: 0, stdout: `nothing committed\n[main ${consolidatedHead}] decoy` },
+      })
+    ),
+    false,
+    "only the first non-empty line counts as the summary"
+  );
+
+  // Not a repo at all: never amend.
+  assert.equal(commitLandedOnHead({ cwd: tmpdir(), tool_name: "Bash" }), false, "non-repo cwd");
 });
 
 // --- #13 parseTrailers: folded lines + pipe-in-alternative ---

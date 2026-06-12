@@ -38,6 +38,7 @@ interface CairnPaths {
   journal: string;
   decisions: string;
   active: string;
+  lastHead: string;
 }
 
 function paths(cwd: string): CairnPaths {
@@ -47,6 +48,7 @@ function paths(cwd: string): CairnPaths {
     journal: join(dir, "journal.jsonl"),
     decisions: join(dir, "decisions.json"),
     active: join(dir, "active-decision"),
+    lastHead: join(dir, "last-head"),
   };
 }
 
@@ -83,6 +85,27 @@ export function readEntries(cwd: string): JournalEntry[] {
 export function clearJournal(cwd: string): void {
   const p = paths(cwd);
   if (existsSync(p.journal)) rmSync(p.journal);
+}
+
+// ---- last consolidated HEAD ----
+
+/**
+ * The HEAD sha observed at the end of the last successful consolidation.
+ * The commit-trigger gate uses it to reject the "fresh timestamp but HEAD
+ * never moved" shape (`git commit || true` seconds after a real commit):
+ * recency alone is not proof a NEW commit exists.
+ */
+export function readLastConsolidatedHead(cwd: string): string | null {
+  const p = paths(cwd);
+  if (!existsSync(p.lastHead)) return null;
+  const sha = readFileSync(p.lastHead, "utf8").trim();
+  return sha || null;
+}
+
+export function writeLastConsolidatedHead(cwd: string, sha: string): void {
+  const p = paths(cwd);
+  ensureDir(p.dir);
+  writeFileSync(p.lastHead, sha, "utf8");
 }
 
 // ---- decisions registry + active pointer ----
