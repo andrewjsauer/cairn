@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { openDecision, recordEdit, consolidate } from "../src/capture/index.js";
 import { readEntries, renamesInHistory } from "../src/store/index.js";
-import { atomsForFile, allAtoms } from "../src/mcp/graph.js";
+import { atomsForFile, allAtoms } from "../src/read/graph.js";
 import { formatChain } from "../src/mcp/format.js";
 import { recall, type Complete } from "../src/engine/index.js";
 import { gitC, makeRepo as sharedMakeRepo } from "./helpers/repo.js";

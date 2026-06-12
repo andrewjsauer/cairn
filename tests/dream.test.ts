@@ -4,8 +4,8 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { openDecision, recordEdit, consolidate, consolidateGraph } from "../src/capture/index.js";
-import { readAllAtoms } from "../src/store/index.js";
-import { atomsForFile } from "../src/mcp/graph.js";
+import { readAllAtoms, writeNote, type NotePayload } from "../src/store/index.js";
+import { atomsForFile } from "../src/read/graph.js";
 import { recall, isRollupAtom, atomTokens, type Complete } from "../src/engine/index.js";
 import { gitC, makeRepo as sharedMakeRepo } from "./helpers/repo.js";
 
@@ -144,6 +144,62 @@ test("the dream keeps a reverted decision verbatim over an older live one, and p
   for (const { atom } of readAllAtoms(repo)) {
     assert.equal(atom.stale, undefined);
     assert.equal(atom.reverted, undefined);
+  }
+});
+
+test("the dream counts a duplicated loreId once and leaves no zombie copy behind", async () => {
+  const repo = makeRepo();
+
+  // Three decisions across three commits.
+  const files = ["a.ts", "b.ts", "c.ts"];
+  for (let i = 0; i < files.length; i++) {
+    const now = `2026-05-${10 + i}T00:00:00.000Z`;
+    openDecision(repo, `decision ${i} about ${files[i]}`, [], now);
+    writeFileSync(join(repo, files[i]), `// rev ${i}\n`);
+    recordEdit(repo, { toolName: "Write", filePath: join(repo, files[i]), reason: `change ${i}`, ts: now });
+    gitC(repo, ["add", "-A"]);
+    gitC(repo, ["commit", "-q", "-m", `feat: ${files[i]} #${i}`]);
+    await consolidate(repo, fake, { now });
+  }
+  assert.equal(readAllAtoms(repo).length, 3, "three level-0 atoms across three commit notes");
+
+  // Orphaned duplicate (post-crash artifact): the SAME atom — same loreId —
+  // written into a note on a SECOND commit that has no Cairn note of its own.
+  const dup = readAllAtoms(repo).find((e) => e.atom.files.includes("a.ts"))!;
+  writeFileSync(join(repo, "extra.ts"), "// host commit for the duplicate note\n");
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "chore: extra commit"]);
+  const dupCommit = gitC(repo, ["rev-parse", "HEAD"]);
+  const payload: NotePayload = {
+    v: 1,
+    commit: dupCommit,
+    generatedAt: dup.atom.createdAt,
+    loreId: dup.atom.loreId,
+    atoms: [dup.atom],
+  };
+  writeNote(dupCommit, payload, repo);
+  assert.equal(readAllAtoms(repo).length, 4, "four physical copies, three unique loreIds");
+
+  // Dream with a tiny budget so the store must fold.
+  const result = await consolidateGraph(repo, fake, { budget: 10, now: "2026-06-01T00:00:00.000Z" });
+  assert.equal(result.ok, true);
+  assert.equal(result.before, 3, "the duplicated atom is counted ONCE for budget purposes");
+  assert.ok(result.rollups >= 1, "produced rollup(s)");
+
+  // The zombie case — one copy pruned, the other surviving in a different note,
+  // re-entering every later read — must be impossible. If the atom was folded
+  // into a rollup, ZERO physical copies remain; if it was kept verbatim,
+  // exactly ONE remains.
+  const after = readAllAtoms(repo);
+  const verbatim = after.filter((e) => !isRollupAtom(e.atom) && e.atom.loreId === dup.atom.loreId);
+  const covered = after
+    .filter((e) => isRollupAtom(e.atom))
+    .some((e) => e.atom.sourceIds.includes(dup.atom.id));
+  assert.ok(verbatim.length <= 1, "never more than one physical copy survives the dream");
+  if (covered) {
+    assert.equal(verbatim.length, 0, "folded atom leaves no verbatim copy in ANY note");
+  } else {
+    assert.equal(verbatim.length, 1, "kept-verbatim atom survives as exactly one physical copy");
   }
 });
 

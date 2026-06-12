@@ -4,7 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { recall } from "../engine/index.js";
 import { repoRoot, repoRelativePath, renamesInHistory } from "../store/index.js";
-import { allAtoms, atomsForFile } from "./graph.js";
+import { allAtoms, atomsForFile } from "../read/graph.js";
 import { formatChain, formatRecent } from "./format.js";
 import { RECALL_TOKEN_BUDGET, DEFAULT_RECENT } from "../config.js";
 

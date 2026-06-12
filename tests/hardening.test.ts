@@ -17,7 +17,7 @@ import { getActiveDecisionId, getDecision, readEntries } from "../src/store/jour
 import { parseTrailers } from "../src/store/trailers.js";
 import { listNotes } from "../src/store/notes.js";
 import { isSignedCommit } from "../src/store/git.js";
-import { atomsForFile } from "../src/mcp/graph.js";
+import { atomsForFile } from "../src/read/graph.js";
 import type { Complete } from "../src/engine/index.js";
 import { gitC, makeRepo as sharedMakeRepo, fake, fakeEcho, tsxCliArgs } from "./helpers/repo.js";
 
