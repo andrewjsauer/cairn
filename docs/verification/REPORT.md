@@ -1,5 +1,13 @@
 # Cairn — Final Verification Report
 
+> **SUPERSEDED (2026-06-12).** This report describes the repo as of 2026-05-30
+> (28 tests). Its open findings — the recall `truncated` flag (C4), the shallow
+> decoupling regex (C5), and the missing global store ceiling (C7) — have all
+> since been fixed, and a newer five-perspective review with its own findings
+> (and their fixes) lives at
+> [2026-06-12-codebase-review.md](2026-06-12-codebase-review.md). Read that
+> instead; this file is kept as a historical snapshot.
+
 **Overall verdict: READY-WITH-GAPS** — every claim is mechanism-true and the build/tests/smoke pass cleanly, but the headline "answers WHY" demo (C6) is mechanism-proven against a stubbed model, never lived end-to-end with a real LLM, and four claims carry honest edge-case caveats.
 
 ## Ground truth (re-run by this report, 2026-05-30)

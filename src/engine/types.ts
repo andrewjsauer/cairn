@@ -84,8 +84,11 @@ export interface RollupAtom {
   summary: string;
   files: string[];
   createdAt: string;
-  /** loreIds of the level-0 atoms this rollup covers. Provenance so deeper levels
-   *  can be reconstructed later without migration. */
+  /** loreIds of the level-0 atoms this rollup covers. Provenance is
+   *  IDENTIFICATION, not reconstruction: after the dream prunes the covered
+   *  atoms from their notes, these ids tell you what the rollup summarizes
+   *  (and let a deeper rollup level be added later without migration), but the
+   *  atoms' full content survives only in the commit's trailer record. */
   sourceIds: string[];
   /** Derived, NOT persisted — see {@link DecisionAtom.stale}. */
   stale?: boolean;

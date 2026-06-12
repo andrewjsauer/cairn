@@ -59,7 +59,7 @@ Requirements: Node 18+, git, and an `ANTHROPIC_API_KEY` (only the capture/consol
 git clone <your-fork-url> cairn && cd cairn
 npm install
 npm run build           # compiles to dist/ — the plugin runs the compiled output
-npm test                # 17 tests, no API key needed
+npm test                # full suite, no API key needed
 export ANTHROPIC_API_KEY=sk-ant-...   # for consolidation; see .env.example
 ```
 
@@ -113,13 +113,17 @@ git push origin refs/notes/cairn                                            # pu
 
 Avoid setting `remote.origin.push` to *only* the notes refspec — that would stop plain `git push` from pushing your branches.
 
+> **Privacy note before pushing notes:** decision records are derived from your coding sessions — the journal snapshots up to 600 characters of assistant transcript per edit, and model-written constraints can echo that content. Cairn does not redact any of it (a redaction pass on the journaled `reason` is deliberate future work). Treat `refs/notes/cairn` as containing session-derived text and push it only where the session content itself could go.
+
 ## Configuration
 
 One file: [`src/config.ts`](src/config.ts).
 
 - `MODEL` — the model behind capture/consolidation (default `claude-haiku-4-5-20251001`). Swap it here.
 - `RECALL_TOKEN_BUDGET` — ceiling for a `why`/`recent` result.
-- `COMPACT_TOKEN_BUDGET` — ceiling the graph is compacted to.
+- `COMPACT_TOKEN_BUDGET` — ceiling a single commit's atom set is compacted to.
+- `STORE_TOKEN_BUDGET` — ceiling for the whole stored graph; the **dream** folds the oldest decisions into rollups when the store grows past it.
+- `DEFAULT_RECENT` — how many decisions `recent` returns when `n` is not given.
 - `NOTES_REF` — the git-notes namespace (`cairn`).
 
 ## Assumptions and scope (this first pass)
@@ -129,7 +133,7 @@ Built against the brief, with the full capture/consolidation trigger set wired (
 - **All triggers wired, durability independent of them.** Capture opens via approved plan or the manual `/cairn:decision`; consolidation runs at commit (trailers + notes), and at compaction / session end / session start (notes only). Because the edit-time journal is synchronous and on disk, every consolidation trigger is a *promptness* enhancement — a missed one loses nothing; the next trigger (or the next commit) picks the journal up.
 - **No-key fallback.** Capture/consolidation call Haiku, but if `ANTHROPIC_API_KEY` is unset the model call fails over to a deterministic record (recorded intent + raw reasons), so the loop still produces durable, queryable decisions — just without model polish.
 - **`/decision` is `/cairn:decision`.** Claude Code namespaces plugin commands by plugin name; there is no way to claim a bare `/decision` from a plugin.
-- **MCP repo resolution.** The brief said "git rev-parse from the session working directory." A user/plugin MCP server is spawned once and its `cwd` isn't guaranteed to be the session repo, so Cairn resolves the active repo from `CLAUDE_PROJECT_DIR` (set in the server's env by Claude Code; `roots/list` is the documented fallback) and then runs `git rev-parse --show-toplevel` from there — same outcome, correct mechanism.
+- **MCP repo resolution.** The brief said "git rev-parse from the session working directory." A user/plugin MCP server is spawned once and its `cwd` isn't guaranteed to be the session repo, so Cairn resolves the active repo from `CLAUDE_PROJECT_DIR` (which Claude Code guarantees in the spawned server's environment) and then runs `git rev-parse --show-toplevel` from there; if the variable is absent the server falls back to its own working directory. MCP `roots/list` exists as a documented protocol-level alternative but is **not implemented** here.
 - **Trailers via amend, guarded.** There is no native git-commit hook in Claude Code, so trailers are written onto the just-made commit with `git commit --amend`, **replacing** (not appending) any prior Cairn block so there is always exactly one `Lore-id` per commit. The amend is **message-only** (`--amend --only`): it never commits whatever happens to be staged at the time, and it runs with `--no-verify` — the tree already passed your hooks when the commit was made, so commit-msg/pre-commit hooks are not re-run against the rewrite (a commit-msg policy hook will not see Cairn's trailer block). The amend is skipped automatically when it would be wrong — the commit is already on a remote-tracking branch, or the commit is **GPG/SSH-signed** (re-signing without consent is not Cairn's call). In both cases the git-note alone carries the reasoning; notes never rewrite history.
 - **Consolidation runs synchronously** inside the commit hook, so a commit pauses briefly while Haiku synthesizes. The Anthropic call and every git call have hard timeouts, and the hook always exits 0 — it never blocks indefinitely or fails the session.
 - **Compaction is two-layer.** Read-time `recall()` bounds every `why`/`recent` result to a token budget regardless of graph size. The **dream** (`consolidateGraph` / `cairn dream`) bounds the *stored* graph: at idle boundaries it folds the oldest decisions into one rollup per file-cluster (one rollup level, single `STORE_TOKEN_BUDGET` knob), so the store stays bounded as history grows. Rollups live in a ledger note on git's empty-tree anchor; commit trailers are never rewritten.
