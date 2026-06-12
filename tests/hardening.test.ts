@@ -84,34 +84,197 @@ const fake: Complete = async (prompt) => {
   });
 };
 
-// --- #2 re-consolidation keeps exactly one Lore-id and one note ---
+// A fake that makes decisions distinguishable: synthesis echoes the recorded
+// intent (or the cluster's file) into the constraint, so tests can assert WHICH
+// decisions survive a merge — not just how many.
+const fakeEcho: Complete = async (prompt) => {
+  if (prompt.includes("Cluster them")) {
+    const ids = [...prompt.matchAll(/id=(j-[0-9a-f]+)/g)].map((m) => m[1]);
+    return JSON.stringify({ clusters: ids.map((id) => [id]) });
+  }
+  if (prompt.startsWith("Summarize these related decisions")) {
+    return JSON.stringify({ summary: "rollup summary" });
+  }
+  const intent = prompt.match(/^Stated intent: (.+)$/m)?.[1];
+  const which = intent ?? `file:${prompt.match(/file=(\S+)/)?.[1] ?? "unknown"}`;
+  return JSON.stringify({
+    intent: which,
+    summary: `s ${which}`,
+    constraints: [`c-${which}`],
+    rejected: [{ alternative: `alt-${which}`, reason: "why" }],
+    confidence: "high",
+  });
+};
 
-test("re-consolidating the same HEAD replaces (not appends) trailers and the note", async () => {
+// --- #2 / C1: re-consolidating the same HEAD MERGES — prior decisions survive ---
+
+test("re-consolidating the same HEAD preserves the first decision in note AND trailers", async () => {
   const repo = makeRepo();
   const now = "2026-05-20T00:00:00.000Z";
+  const later = "2026-05-20T00:01:00.000Z";
   openDecision(repo, "first", [], now);
   writeFileSync(join(repo, "a.ts"), "1\n");
   recordEdit(repo, { toolName: "Write", filePath: join(repo, "a.ts"), reason: "r1", ts: now });
   gitC(repo, ["add", "-A"]);
   gitC(repo, ["commit", "-q", "-m", "feat: a"]);
-  await consolidate(repo, fake, { now });
+  await consolidate(repo, fakeEcho, { now });
 
   // A new edit lands with NO new commit, then we consolidate again on the same logical commit.
-  openDecision(repo, "second", [], now);
+  openDecision(repo, "second", [], later);
   writeFileSync(join(repo, "a.ts"), "2\n");
-  recordEdit(repo, { toolName: "Write", filePath: join(repo, "a.ts"), reason: "r2", ts: now });
-  await consolidate(repo, fake, { now });
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "a.ts"), reason: "r2", ts: later });
+  await consolidate(repo, fakeEcho, { now: later });
 
   const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
-  const loreIdCount = (message.match(/^Lore-id:/gm) ?? []).length;
-  assert.equal(loreIdCount, 1, "exactly one Lore-id per commit after re-consolidation");
-
+  assert.equal((message.match(/^Lore-id:/gm) ?? []).length, 1, "exactly one Lore-id");
   // git's own parser agrees there is exactly one Lore-id.
   const parsed = gitC(repo, ["interpret-trailers", "--parse"], message);
   assert.equal((parsed.match(/^Lore-id:/gm) ?? []).length, 1);
 
+  // THE C1 REGRESSION: decision "first" must survive the second amend — in the
+  // trailer block (its constraint and rejected alternative) and in the graph.
+  assert.ok(/^Constraint: c-first$/m.test(message), "first decision's constraint survives");
+  assert.ok(/^Constraint: c-second$/m.test(message), "second decision's constraint present");
+  assert.ok(message.includes("alt-first"), "first decision's rejected alternative survives");
+  const atoms = atomsForFile(repo, "a.ts");
+  assert.deepEqual(
+    atoms.map((a) => a.intent).sort(),
+    ["first", "second"],
+    "both decisions queryable from the notes graph"
+  );
+
   // The note orphaned by the second amend was removed; exactly one note remains.
   assert.equal(listNotes(repo).length, 1, "no orphaned notes accumulate");
+});
+
+test("commit-trigger consolidation at a flush-noted HEAD carries flush atoms into the trailers", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  // A real commit exists at HEAD…
+  writeFileSync(join(repo, "base.ts"), "0\n");
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: base"]);
+  // …in-flight reasoning is promoted by a notes-only flush at that HEAD…
+  openDecision(repo, "flushed", [], now);
+  writeFileSync(join(repo, "f1.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "f1.ts"), reason: "r", ts: now });
+  await consolidate(repo, fakeEcho, { now, writeTrailers: false });
+
+  // …then a commit-shaped consolidation lands at the SAME HEAD.
+  const later = "2026-05-20T00:01:00.000Z";
+  openDecision(repo, "committed", [], later);
+  writeFileSync(join(repo, "f2.ts"), "2\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "f2.ts"), reason: "r2", ts: later });
+  await consolidate(repo, fakeEcho, { now: later });
+
+  const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  assert.ok(/^Constraint: c-flushed$/m.test(message), "flush-written decision reaches the trailers");
+  assert.ok(/^Constraint: c-committed$/m.test(message), "new decision in the trailers");
+  assert.equal(atomsForFile(repo, "f1.ts").length, 1, "flushed decision still queryable");
+  assert.equal(atomsForFile(repo, "f2.ts").length, 1, "committed decision queryable");
+  assert.equal(listNotes(repo).length, 1, "one merged note");
+});
+
+test("replaying an identical journal is idempotent: no re-amend, no sha churn", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "stable", [], now);
+  writeFileSync(join(repo, "i.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "i.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: i"]);
+  const first = await consolidate(repo, fakeEcho, { now });
+  assert.equal(first.amended, true);
+  const shaAfterFirst = gitC(repo, ["rev-parse", "HEAD"]);
+
+  // The exact same journal content again (a re-fired hook replaying its input).
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "i.ts"), reason: "r", ts: now });
+  const second = await consolidate(repo, fakeEcho, { now });
+  assert.equal(second.amended, false, "identical record short-circuits (already-current)");
+  assert.equal(gitC(repo, ["rev-parse", "HEAD"]), shaAfterFirst, "no sha churn on replay");
+  assert.equal((gitC(repo, ["show", "-s", "--format=%B", "HEAD"]).match(/^Lore-id:/gm) ?? []).length, 1);
+});
+
+test("a rollup in the existing note never leaks into the trailer record", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  writeFileSync(join(repo, "a.ts"), "1\n");
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: a"]);
+  // A dream previously left a level-1 rollup in this commit's note.
+  const rollup = {
+    id: "r-1",
+    loreId: "r-1",
+    level: 1,
+    summary: "ROLLUP-SUMMARY-TEXT",
+    files: ["a.ts"],
+    sourceIds: ["dead", "beef"],
+    createdAt: now,
+  };
+  gitC(
+    repo,
+    ["notes", "--ref=cairn", "add", "-f", "-F", "-", "HEAD"],
+    JSON.stringify({ v: 1, commit: "x", generatedAt: now, loreId: "old", atoms: [rollup] })
+  );
+
+  openDecision(repo, "fresh", [], now);
+  writeFileSync(join(repo, "a.ts"), "2\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "a.ts"), reason: "r", ts: now });
+  await consolidate(repo, fakeEcho, { now });
+
+  const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  assert.ok(!message.includes("ROLLUP-SUMMARY-TEXT"), "rollup text stays out of trailers");
+  assert.ok(/^Constraint: c-fresh$/m.test(message), "decision constraint present");
+  // The rollup itself survives in the merged note.
+  const note = gitC(repo, ["notes", "--ref=cairn", "show", "HEAD"]);
+  assert.ok(note.includes('"level":1') || note.includes('"level": 1'), "rollup kept in note");
+});
+
+test("constraints folded by within-run compaction still reach the trailer block", async () => {
+  const repo = makeRepo();
+  // Three unattached edits whose synthesized constraints are ~2k tokens each —
+  // past COMPACT_TOKEN_BUDGET, so the oldest folds into a rollup in the NOTE.
+  // The TRAILER record is built pre-compaction and must keep all three.
+  const pad = "x".repeat(8000);
+  const fakeBig: Complete = async (prompt) => {
+    if (prompt.includes("Cluster them")) {
+      const ids = [...prompt.matchAll(/id=(j-[0-9a-f]+)/g)].map((m) => m[1]);
+      return JSON.stringify({ clusters: ids.map((id) => [id]) });
+    }
+    if (prompt.startsWith("Summarize these related decisions")) {
+      return JSON.stringify({ summary: "rollup summary" });
+    }
+    const f = prompt.match(/file=(\S+)/)?.[1] ?? "unknown";
+    return JSON.stringify({
+      intent: `intent ${f}`,
+      summary: `s ${f}`,
+      constraints: [`marker-${f} ${pad}`],
+      confidence: "high",
+    });
+  };
+
+  for (const [i, f] of (["big1.ts", "big2.ts", "big3.ts"] as const).entries()) {
+    writeFileSync(join(repo, f), "x\n");
+    recordEdit(repo, {
+      toolName: "Write",
+      filePath: join(repo, f),
+      reason: `r${i}`,
+      ts: `2026-05-20T00:0${i}:00.000Z`,
+    });
+  }
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: big"]);
+  await consolidate(repo, fakeBig, { now: "2026-05-20T00:05:00.000Z" });
+
+  const note = gitC(repo, ["notes", "--ref=cairn", "show", "HEAD"]);
+  assert.ok(
+    note.includes('"level":1') || note.includes('"level": 1'),
+    "compaction actually fired (note holds a rollup) — otherwise this test is vacuous"
+  );
+  const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  for (const f of ["big1.ts", "big2.ts", "big3.ts"]) {
+    assert.ok(message.includes(`marker-${f}`), `${f}'s constraint survives in the trailer`);
+  }
 });
 
 // --- amend safety: message-only, never the index, never blocked by user hooks ---

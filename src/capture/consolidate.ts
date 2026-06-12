@@ -19,6 +19,7 @@ import {
   removeNote,
   appendTrailersToCommit,
   emitTrailers,
+  readCommitTrailers,
   type JournalEntry,
   type LoreRecord,
   type NotePayload,
@@ -100,19 +101,29 @@ export async function consolidate(
   });
 
   // 4. Build a single commit-level Lore record (exactly one Lore-id per commit).
-  const record = buildLoreRecord(newAtoms);
+  //    The record is the UNION of everything consolidated against this commit:
+  //    the new atoms, any decision atoms already noted on it (a prior
+  //    consolidation or notes-only flush at the same HEAD), and any trailer
+  //    block already on the message (the only survivor of a dream-pruned note).
+  //    It is built from PRE-compaction atoms so a within-run rollup can never
+  //    drop a decision's constraints from the permanent record.
+  const sha = headSha(root);
+  const existingNote = readNote(sha, root);
+  const notedDecisions = (existingNote?.atoms ?? []).filter(isDecisionAtom);
+  const recordAtoms = mergeAtomsByLoreId(notedDecisions, newAtoms).filter(isDecisionAtom);
+  const record = unionLoreRecords(buildLoreRecord(recordAtoms), readCommitTrailers(sha, root));
 
   // 5. At a commit, amend Lore trailers onto it (guarded). At a non-commit
   //    inflection point, leave the message alone and only update the notes graph.
-  const sha = headSha(root);
   const { amended, sha: noteSha } = writeTrailers
     ? appendTrailersToCommit(sha, emitTrailers(record), root)
     : { amended: false, sha };
 
   // A commit's note is the UNION of all decisions consolidated against it,
-  // deduped by Lore-id. Merge with any existing note so a later notes-only flush
-  // (or re-consolidation) adds to the commit's record instead of clobbering it.
-  const existingNote = noteSha === sha ? readNote(noteSha, root) : null;
+  // deduped by Lore-id. The existing note was read from the PRE-amend sha
+  // (amending rewrites the commit; its note does not move with it) and merged
+  // here, so a re-consolidation ADDS to the commit's record — it never clobbers
+  // atoms a prior consolidation or flush already recorded.
   const payload: NotePayload = {
     v: 1,
     commit: noteSha,
@@ -121,7 +132,7 @@ export async function consolidate(
     atoms: mergeAtomsByLoreId(existingNote?.atoms ?? [], compactedNew),
   };
   writeNote(noteSha, payload, root);
-  // The amend rewrote the commit; any note on the pre-amend sha is now orphaned.
+  // The pre-amend note is merged into the payload above; the orphan can go.
   if (amended && noteSha !== sha) removeNote(sha, root);
 
   // 6. The journal has been promoted to durable records; clear it.
@@ -151,6 +162,33 @@ function buildLoreRecord(atoms: DecisionAtom[]): LoreRecord {
   // Never emit a self-referential Supersedes (semantically invalid in Lore).
   const supersedes = [...new Set(atoms.flatMap((a) => a.supersedes))].filter((s) => s !== loreId);
   return { loreId, constraints, rejected, confidence, supersedes };
+}
+
+/**
+ * Union a freshly built record with the trailer record already on the commit.
+ * The amend REPLACES the old block, so anything not carried forward here is
+ * gone from the permanent record. The trailer is the only place a decision
+ * survives once a dream prunes its atom from the note — this union is what
+ * makes the block monotone under re-consolidation and crash-retry.
+ */
+function unionLoreRecords(record: LoreRecord, prior: LoreRecord | null): LoreRecord {
+  if (!prior) return record;
+  return {
+    loreId: record.loreId,
+    constraints: [...new Set([...prior.constraints, ...record.constraints])],
+    rejected: uniqueRejected([...prior.rejected, ...record.rejected]),
+    // Conservative both ways: the commit is only as settled as its
+    // least-settled record, old or new.
+    confidence:
+      CONFIDENCE_RANK[prior.confidence] < CONFIDENCE_RANK[record.confidence]
+        ? prior.confidence
+        : record.confidence,
+    // Commit-level record ids are replacements, not decision lineage — keep
+    // them out of Supersedes.
+    supersedes: [...new Set([...prior.supersedes, ...record.supersedes])].filter(
+      (s) => s !== record.loreId && s !== prior.loreId
+    ),
+  };
 }
 
 function linkSupersedes(atom: DecisionAtom, existing: DecisionAtom[]): void {

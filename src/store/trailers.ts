@@ -202,9 +202,11 @@ export function appendTrailersToCommit(
   // index — staged-but-uncommitted work must not be folded into the rewrite.
   // --no-verify: the tree already passed the user's hooks when the commit was
   // made; re-running them against a message-only amend can only break it.
-  git(["commit", "--amend", "--only", "--no-edit", "--no-verify", "-F", "-"], {
-    cwd,
-    input: message,
-  });
+  // --allow-empty: a message-only rewrite of an empty commit stays empty —
+  // without it git rejects the amend ("No changes") and consolidation fails.
+  git(
+    ["commit", "--amend", "--only", "--allow-empty", "--no-edit", "--no-verify", "-F", "-"],
+    { cwd, input: message }
+  );
   return { amended: true, sha: git(["rev-parse", "HEAD"], { cwd }) };
 }
