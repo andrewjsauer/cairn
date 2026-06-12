@@ -14,6 +14,7 @@ import { readFileSync, readdirSync, statSync, mkdtempSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanEngineDir, assertChildProcessConfinedTo } from "./lib/engine-imports.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 let failures = 0;
@@ -56,17 +57,11 @@ if (m) assert("  all tests pass", m[2] === "0", `${m[1]} pass, ${m[2]} fail`);
 
 run("smoke: real MCP server over stdio (why/recent)", ["node", "scripts/smoke.mjs"]);
 
-// --- 2. Engine decoupling (allowlist: engine may import ONLY its own ./ modules) ---
-const specOf = (l) =>
-  (l.match(/\bfrom\s*["']([^"']+)["']/) || l.match(/\bimport\s*\(\s*["']([^"']+)["']/) ||
-   l.match(/\brequire\(\s*["']([^"']+)["']/) || l.match(/^\s*import\s+["']([^"']+)["']/) || [])[1] ?? null;
-const engineViolations = tsFiles(join(ROOT, "src", "engine")).flatMap((f) =>
-  readFileSync(f, "utf8").split("\n")
-    .filter((l) => /^\s*import\b/.test(l) || /^\s*export\b[^;]*\bfrom\b/.test(l) || /\bimport\s*\(/.test(l) || /\brequire\(/.test(l))
-    .map(specOf).filter((s) => s && !s.startsWith("./"))
-    .map((s) => `${f}: imports "${s}"`)
-);
+// --- 2. Engine decoupling (AST allowlist shared with tests/decoupling.test.ts) ---
+const engineViolations = scanEngineDir(join(ROOT, "src", "engine")).flatMap((e) => e.violations);
 assert("engine imports only its own ./ modules (no git/CC/store/SDK)", engineViolations.length === 0, engineViolations[0] || "");
+const cpViolations = assertChildProcessConfinedTo(join(ROOT, "src"), "store/git.ts");
+assert("child_process confined to store/git.ts", cpViolations.length === 0, cpViolations[0] || "");
 
 // --- 3. Read surface = exactly why + recent (non-goal: no search/summary) ---
 const server = readFileSync(join(ROOT, "src", "mcp", "server.ts"), "utf8");
