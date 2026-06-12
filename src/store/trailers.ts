@@ -198,6 +198,13 @@ export function appendTrailersToCommit(
   // Replace (not append) any prior Cairn block -> exactly one Lore-id per commit.
   const body = stripCairnTrailers(existing).replace(/\s+$/, "");
   const message = `${body}\n\n${block}\n`;
-  git(["commit", "--amend", "--no-edit", "-F", "-"], { cwd, input: message });
+  // --only with no pathspec amends the MESSAGE against HEAD's tree, never the
+  // index — staged-but-uncommitted work must not be folded into the rewrite.
+  // --no-verify: the tree already passed the user's hooks when the commit was
+  // made; re-running them against a message-only amend can only break it.
+  git(["commit", "--amend", "--only", "--no-edit", "--no-verify", "-F", "-"], {
+    cwd,
+    input: message,
+  });
   return { amended: true, sha: git(["rev-parse", "HEAD"], { cwd }) };
 }

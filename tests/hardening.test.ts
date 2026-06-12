@@ -114,6 +114,58 @@ test("re-consolidating the same HEAD replaces (not appends) trailers and the not
   assert.equal(listNotes(repo).length, 1, "no orphaned notes accumulate");
 });
 
+// --- amend safety: message-only, never the index, never blocked by user hooks ---
+
+test("amend never folds staged-but-uncommitted changes into the commit", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "amend safety", [], now);
+  writeFileSync(join(repo, "a.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "a.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: a"]);
+
+  // The user stages MORE work before the hook-driven consolidation runs
+  // (the `git commit -m wip && git add .` compound-command shape).
+  const treeBefore = gitC(repo, ["rev-parse", "HEAD^{tree}"]);
+  writeFileSync(join(repo, "staged-later.ts"), "next commit's work\n");
+  gitC(repo, ["add", "staged-later.ts"]);
+
+  const result = await consolidate(repo, fake, { now });
+  assert.equal(result.amended, true, "amend ran");
+
+  // The amended commit's TREE is unchanged: staged work was not folded in.
+  assert.equal(gitC(repo, ["rev-parse", "HEAD^{tree}"]), treeBefore, "tree unchanged by amend");
+  assert.ok(
+    !gitC(repo, ["ls-tree", "--name-only", "HEAD"]).includes("staged-later.ts"),
+    "staged file is not in the amended commit"
+  );
+  // ...and it is still staged for the user's NEXT commit.
+  assert.equal(gitC(repo, ["diff", "--cached", "--name-only"]), "staged-later.ts");
+});
+
+test("a rejecting commit-msg hook does not block the trailer amend", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "hook safety", [], now);
+  writeFileSync(join(repo, "h.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "h.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: h"]);
+
+  // Install a commit-msg hook that rejects everything AFTER the commit exists.
+  // The tree already passed the user's hooks; a message-only amend must not
+  // re-run them (and must not fail when they would reject).
+  const hooksDir = join(repo, ".git", "hooks");
+  mkdirSync(hooksDir, { recursive: true });
+  writeFileSync(join(hooksDir, "commit-msg"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+
+  const result = await consolidate(repo, fake, { now });
+  assert.equal(result.amended, true, "amend not blocked by the rejecting hook");
+  const message = gitC(repo, ["show", "-s", "--format=%B", "HEAD"]);
+  assert.ok(/^Lore-id:/m.test(message), "trailers landed despite the hook");
+});
+
 // --- inbound Lore interop: a foreign trailer (no Cairn note) is read by why() ---
 
 test("atomsForFile reads a Lore record written by another tool (no Cairn note)", () => {
