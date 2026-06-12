@@ -44,7 +44,13 @@ export function emitTrailers(record: LoreRecord): string {
     lines.push(`Rejected: ${oneLine(r.alternative)}${reason ? ` | ${reason}` : ""}`);
   }
   lines.push(`Confidence: ${record.confidence}`);
-  for (const s of record.supersedes) lines.push(`Supersedes: ${s}`);
+  // Supersedes is the one value emitted without oneLine(). Its only legitimate
+  // shape is an 8-char content-hash id; anything else can only come from a
+  // crafted/foreign note, and a newline there could forge a trailer line — so
+  // drop anything that doesn't match instead of emitting it.
+  for (const s of record.supersedes) {
+    if (/^[0-9a-f]{8}$/.test(s)) lines.push(`Supersedes: ${s}`);
+  }
   return lines.join("\n");
 }
 
@@ -140,9 +146,10 @@ export function parseTrailers(message: string): LoreRecord | null {
 /**
  * Remove Cairn's own trailers from the trailing block so a re-amend REPLACES
  * rather than appends them (guaranteeing exactly one Lore-id). Foreign trailers
- * in the same block (Signed-off-by, Co-authored-by, …) are preserved.
+ * in the same block (Signed-off-by, Co-authored-by, …) are preserved verbatim,
+ * including their RFC-822 folded continuation lines.
  */
-function stripCairnTrailers(message: string): string {
+export function stripCairnTrailers(message: string): string {
   const lines = message.replace(/\r/g, "").split("\n");
   const bounds = trailerBlockBounds(lines);
   if (!bounds) return message;
@@ -150,9 +157,14 @@ function stripCairnTrailers(message: string): string {
   const block = lines.slice(start, end);
   if (!block.some((l) => /^Lore-id:/.test(l))) return message; // nothing of ours
 
+  // Track which trailer the current line belongs to: a folded continuation
+  // (non-trailer line) is dropped only when it continues a Cairn trailer;
+  // foreign trailers keep their first line AND their continuations verbatim.
+  let inCairnTrailer = false;
   const kept = block.filter((l) => {
     const m = l.match(TRAILER_RE);
-    return m ? !CAIRN_KEYS.has(m[1]) : false; // drop Cairn keys + any folded conts
+    if (m) inCairnTrailer = CAIRN_KEYS.has(m[1]);
+    return !inCairnTrailer;
   });
   const rebuilt = [...lines.slice(0, start), ...kept].join("\n").replace(/\s+$/, "");
   return rebuilt;
