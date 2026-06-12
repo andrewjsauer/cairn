@@ -634,3 +634,71 @@ test("recordEdit ignores edits outside the repo", () => {
   const entry = recordEdit(repo, { toolName: "Write", filePath: outside, reason: "r" });
   assert.equal(entry, null, "out-of-repo edit returns null");
 });
+
+// --- M11: CLI hook gating, spawned from source — garbage in, nothing out ---
+
+/**
+ * Spawn a hook command the way Claude Code does (JSON on stdin), from SOURCE
+ * via tsx. ANTHROPIC_API_KEY is stripped so flush/consolidate-if-commit stay
+ * offline on the deterministic no-key fallback; CLAUDE_PROJECT_DIR is stripped
+ * so resolution comes from the payload/cwd, not the developer's session.
+ */
+function spawnHook(repo: string, command: string, input: string) {
+  const env = { ...process.env };
+  delete env.ANTHROPIC_API_KEY;
+  delete env.CLAUDE_PROJECT_DIR;
+  const [cmd, args] = tsxCliArgs(command);
+  return spawnSync(cmd, args, { cwd: repo, input, encoding: "utf8", env });
+}
+
+test("every hook command exits 0 on garbage stdin and leaves no side effects", () => {
+  const repo = makeRepo();
+  for (const command of ["journal-edit", "open-from-plan", "consolidate-if-commit", "flush"]) {
+    const r = spawnHook(repo, command, "not json{");
+    assert.equal(r.status, 0, `${command} must exit 0 on garbage stdin (stderr: ${r.stderr})`);
+  }
+  assert.equal(readEntries(repo).length, 0, "no journal entry written");
+  assert.equal(getActiveDecisionId(repo), null, "no decision opened");
+  assert.equal(listNotes(repo).length, 0, "no note written");
+});
+
+test("journal-edit gates on the tool: NotebookEdit journals, Bash does not", () => {
+  const repo = makeRepo();
+  const file = join(repo, "nb.ipynb");
+  writeFileSync(file, "{}\n");
+
+  const editPayload = JSON.stringify({
+    tool_name: "NotebookEdit",
+    tool_input: { file_path: file },
+    cwd: repo,
+  });
+  const r1 = spawnHook(repo, "journal-edit", editPayload);
+  assert.equal(r1.status, 0, r1.stderr);
+  const entries = readEntries(repo);
+  assert.equal(entries.length, 1, "NotebookEdit edit journaled");
+  assert.equal(entries[0].file, "nb.ipynb");
+  assert.equal(entries[0].change, "NotebookEdit");
+
+  const bashPayload = JSON.stringify({
+    tool_name: "Bash",
+    tool_input: { file_path: file },
+    cwd: repo,
+  });
+  const r2 = spawnHook(repo, "journal-edit", bashPayload);
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.equal(readEntries(repo).length, 1, "a Bash payload journals nothing");
+});
+
+test("open-from-plan opens a decision whose intent is derived from the plan", () => {
+  const repo = makeRepo();
+  const payload = JSON.stringify({
+    tool_name: "ExitPlanMode",
+    tool_input: { plan: "# Do X" },
+    cwd: repo,
+  });
+  const r = spawnHook(repo, "open-from-plan", payload);
+  assert.equal(r.status, 0, r.stderr);
+  const id = getActiveDecisionId(repo);
+  assert.ok(id, "a decision is now active");
+  assert.equal(getDecision(repo, id!)!.intent, "Do X", "heading marker stripped, intent kept");
+});

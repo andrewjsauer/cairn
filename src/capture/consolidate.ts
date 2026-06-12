@@ -71,6 +71,16 @@ export async function consolidate(
     return { ok: true, reason: "empty-journal", written: 0, amended: false };
   }
 
+  // A repo with zero commits has no HEAD to consolidate against. Bail BEFORE
+  // any model call is spent; the journal is untouched (nothing was consumed),
+  // so the first real commit's trigger picks everything up.
+  let sha: string;
+  try {
+    sha = headSha(root);
+  } catch {
+    return { ok: false, reason: "no-head", written: 0, amended: false };
+  }
+
   const now = opts.now ?? new Date().toISOString();
   const decisions = readDecisions(root);
 
@@ -108,7 +118,6 @@ export async function consolidate(
   //    block already on the message (the only survivor of a dream-pruned note).
   //    It is built from PRE-compaction atoms so a within-run rollup can never
   //    drop a decision's constraints from the permanent record.
-  const sha = headSha(root);
   const existingNote = readNote(sha, root);
   const notedDecisions = (existingNote?.atoms ?? []).filter(isDecisionAtom);
   const recordAtoms = mergeAtomsByLoreId(notedDecisions, newAtoms).filter(isDecisionAtom);

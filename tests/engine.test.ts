@@ -357,3 +357,98 @@ test("recent(n) under a tight budget reports truncated, not limited", async () =
   assert.equal(result.truncated, true);
   assert.equal(result.limited, false);
 });
+
+// --- M6/M11: no-key path — every model call THROWS, fallbacks carry the load ---
+
+const throwing: Complete = async () => {
+  throw new Error("no key");
+};
+
+test("ingest with a throwing complete falls back to per-file clusters with raw-reason content", async () => {
+  const unattached = (id: string, file: string, reason: string) =>
+    obs({ id, decisionId: null, decisionIntent: null, decisionAlternatives: [], file, reason });
+  const observations = [
+    unattached("u1", "src/x.ts", "tightened the parser"),
+    unattached("u2", "src/x.ts", "handled the empty case"),
+    unattached("u3", "src/y.ts", "renamed the helper"),
+  ];
+  const atoms = await ingest(observations, throwing, { now: "2026-05-02T00:00:00.000Z" });
+
+  assert.equal(atoms.length, 2, "clustering fell back to one inferred decision per file");
+  const x = atoms.find((a) => a.files.includes("src/x.ts"))!;
+  const y = atoms.find((a) => a.files.includes("src/y.ts"))!;
+  assert.equal(x.intent, "Changes to src/x.ts", "deterministic fallback intent");
+  assert.equal(x.summary, "tightened the parser handled the empty case", "raw reasons survive as the summary");
+  assert.equal(y.intent, "Changes to src/y.ts");
+  assert.equal(y.summary, "renamed the helper");
+});
+
+test("ingest with a throwing complete keeps the RECORDED intent and alternatives", async () => {
+  const atoms = await ingest([obs({})], throwing, { now: "2026-05-02T00:00:00.000Z" });
+  assert.equal(atoms.length, 1);
+  assert.equal(atoms[0].intent, "make retries safe", "recorded intent wins over the file fallback");
+  assert.deepEqual(atoms[0].rejected, [{ alternative: "no retry", reason: "" }]);
+});
+
+test("compact and compactGraph over budget with a throwing complete join member intents with ' → '", async () => {
+  const a = mkAtom({
+    id: "old", loreId: "old", files: ["src/x.ts"], intent: "first decision",
+    summary: "reasoning ".repeat(20), createdAt: "2026-05-10T00:00:00.000Z",
+  });
+  const b = mkAtom({
+    id: "new", loreId: "new", files: ["src/x.ts"], intent: "second decision",
+    summary: "reasoning ".repeat(20), createdAt: "2026-05-20T00:00:00.000Z",
+  });
+
+  // Budget of 1: everything overflows into a single same-file rollup.
+  const out = await compact([a, b], throwing, { tokenBudget: 1 });
+  const rollups = out.filter(isRollupAtom);
+  assert.equal(rollups.length, 1);
+  // compact folds the (oldest-first) overflow in collection order: newest first.
+  assert.equal(rollups[0].summary, "second decision → first decision");
+
+  const out2 = await compactGraph([a, b], throwing, { tokenBudget: 1 });
+  const rollups2 = out2.filter(isRollupAtom);
+  assert.equal(rollups2.length, 1);
+  assert.equal(rollups2[0].summary, "second decision → first decision");
+});
+
+// --- F7: a model-repeated id inside one cluster maps each observation once ---
+
+test("a duplicated id within a cluster yields one observation per id, no duplicate sourceIds", async () => {
+  const unattached = (id: string, file: string) =>
+    obs({ id, decisionId: null, decisionIntent: null, decisionAlternatives: [], file });
+  const atoms = await ingest(
+    [unattached("u1", "src/x.ts"), unattached("u2", "src/y.ts")],
+    fakeComplete({ clusters: [["u1", "u1", "u2"]] }),
+    { now: "2026-05-02T00:00:00.000Z" }
+  );
+  assert.equal(atoms.length, 1, "one cluster -> one atom");
+  assert.deepEqual(atoms[0].sourceIds, ["u1", "u2"], "sourceIds carry each id exactly once");
+  assert.equal(new Set(atoms[0].sourceIds).size, atoms[0].sourceIds.length);
+});
+
+// --- SAME_DECISION_THRESHOLD straddle: deterministic pairs just above / just below ---
+
+import { SAME_DECISION_THRESHOLD } from "../src/engine/index.js";
+
+test("fiveDimensionOverlap pairs straddling SAME_DECISION_THRESHOLD link / don't link", () => {
+  assert.equal(SAME_DECISION_THRESHOLD, 0.5, "the fractions below are built for a 0.5 threshold");
+  // Only the files + intent dimensions are active (constraints/rejected/summary
+  // empty on both sides -> excluded from the mean). Token sets are chosen so the
+  // jaccard values are exact fractions:
+  //   linking pair:  files {x,y}∩{x}=1/2, intent {alpha,beta,gamma}∩{alpha,beta,delta}=2/4
+  //                  -> mean (0.5 + 0.5)/2 = 0.5  == threshold -> links (>=)
+  //   non-linking:   files 1/2, intent {alpha,beta}∩{alpha,gamma}=1/3
+  //                  -> mean (0.5 + 1/3)/2 ≈ 0.417 < threshold -> doesn't link
+  const linkA = mkAtom({ files: ["x.ts", "y.ts"], intent: "alpha beta gamma", summary: "" });
+  const linkB = mkAtom({ files: ["x.ts"], intent: "alpha beta delta", summary: "" });
+  const above = fiveDimensionOverlap(linkA, linkB).score;
+  assert.ok(above >= SAME_DECISION_THRESHOLD, `score ${above} meets the threshold -> supersedes link`);
+
+  const farA = mkAtom({ files: ["x.ts", "y.ts"], intent: "alpha beta", summary: "" });
+  const farB = mkAtom({ files: ["x.ts"], intent: "alpha gamma", summary: "" });
+  const below = fiveDimensionOverlap(farA, farB).score;
+  assert.ok(below < SAME_DECISION_THRESHOLD, `score ${below} stays under the threshold -> no link`);
+  assert.ok(above - below < 0.1, "the two pairs genuinely straddle the threshold, not a trivial gap");
+});

@@ -91,6 +91,11 @@ test("the dream folds a deleted-file atom before a live one, and never persists 
   gitC(repo, ["rm", "-q", "gone.ts"]);
   gitC(repo, ["commit", "-q", "-m", "chore: drop gone.ts"]);
 
+  // Capture the doomed atom's identity BEFORE the dream folds it away.
+  const goneAtom = readAllAtoms(repo)
+    .map((e) => e.atom)
+    .find((a) => a.files.includes("gone.ts"))!;
+
   // Budget with room for exactly one verbatim atom, forcing a choice. Use the
   // LARGEST atom's cost so the budget is independent of note-listing order and
   // of whether linkSupersedes added a (size-bearing) supersedes line.
@@ -105,7 +110,8 @@ test("the dream folds a deleted-file atom before a live one, and never persists 
   const stored = readAllAtoms(repo).map((x) => x.atom);
   const covered = new Set(stored.filter(isRollupAtom).flatMap((r) => r.sourceIds));
   const goneSurvivesVerbatim = stored.some((a) => !isRollupAtom(a) && a.files.includes("gone.ts"));
-  assert.ok(!goneSurvivesVerbatim || covered.size > 0, "gone.ts reasoning was folded, not kept ahead of live");
+  assert.equal(goneSurvivesVerbatim, false, "gone.ts reasoning was folded, not kept ahead of live");
+  assert.ok(covered.has(goneAtom.loreId), "a rollup's provenance covers the folded gone.ts atom");
 
   // The derived flag never reached the notes store.
   for (const { atom } of readAllAtoms(repo)) {

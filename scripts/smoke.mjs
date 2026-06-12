@@ -109,7 +109,34 @@ async function main() {
   const recent = await client.callTool({ name: "recent", arguments: { n: 5 } });
   ok("recent(n) returns decisions", /retry transient upstream failures/.test(recent.content[0].text));
 
+  // 6. why() with an ABSOLUTE path resolves repo-relative and answers cleanly —
+  //    and the server stays alive for a subsequent call.
+  const whyAbs = await client.callTool({ name: "why", arguments: { file: join(repo, "src", "client.ts") } });
+  ok(
+    "why(absolute path) answers without crashing",
+    whyAbs.isError !== true && /retry transient upstream failures/.test(whyAbs.content[0].text)
+  );
+  const afterAbs = await client.callTool({ name: "recent", arguments: { n: 1 } });
+  ok("server still answers after the absolute-path call", Boolean(afterAbs.content?.[0]?.text));
+
   await client.close();
+
+  // 7. A second server pointed at a NON-repo directory: why() must come back as
+  //    a structured error result, not a server crash.
+  const nonRepo = mkdtempSync(join(tmpdir(), "cairn-smoke-nonrepo-"));
+  const transport2 = new StdioClientTransport({
+    command: "node",
+    args: [SERVER],
+    env: { ...process.env, CLAUDE_PROJECT_DIR: nonRepo },
+  });
+  const client2 = new Client({ name: "cairn-smoke-nonrepo", version: "0.1.0" });
+  await client2.connect(transport2);
+  const whyNonRepo = await client2.callTool({ name: "why", arguments: { file: "anything.ts" } });
+  ok(
+    "why outside a git repo is a structured error, not a crash",
+    whyNonRepo.isError === true && /not inside a git repository/i.test(whyNonRepo.content?.[0]?.text ?? "")
+  );
+  await client2.close();
 
   console.log("\n--- BEFORE/AFTER illustration (mechanism) ---\n");
   console.log("BARE session, asked 'why does src/client.ts retry twice?' — only has git:");
