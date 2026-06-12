@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, appendFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,7 +13,7 @@ import {
   recordEdit,
   consolidate,
 } from "../src/capture/index.js";
-import { getActiveDecisionId, getDecision } from "../src/store/journal.js";
+import { getActiveDecisionId, getDecision, readEntries } from "../src/store/journal.js";
 import { parseTrailers } from "../src/store/trailers.js";
 import { listNotes } from "../src/store/notes.js";
 import { atomsForFile } from "../src/mcp/graph.js";
@@ -530,6 +530,82 @@ test("flush merges into the commit's note instead of overwriting it", async () =
   // the committed one (the bug the dogfood walkthrough caught).
   assert.equal(atomsForFile(repo, "committed.ts").length, 1, "committed decision survives the flush");
   assert.equal(atomsForFile(repo, "inflight.ts").length, 1, "in-flight decision is added");
+});
+
+// --- C4: consolidation consumes only what it read — late appends survive ---
+
+test("an entry appended during consolidation survives the journal clear", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "early", [], now);
+  writeFileSync(join(repo, "early.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "early.ts"), reason: "r", ts: now });
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: early"]);
+
+  // A parallel hook appends WHILE the model call is in flight.
+  let appended = false;
+  const sneaky: Complete = async (prompt) => {
+    if (!appended) {
+      appended = true;
+      writeFileSync(join(repo, "late.ts"), "2\n");
+      recordEdit(repo, {
+        toolName: "Write",
+        filePath: join(repo, "late.ts"),
+        reason: "raced in mid-consolidation",
+        ts: "2026-05-20T00:00:30.000Z",
+      });
+    }
+    return fakeEcho(prompt);
+  };
+  await consolidate(repo, sneaky, { now });
+
+  // The early entry was consumed; the late one is still in the journal…
+  const remaining = readEntries(repo);
+  assert.equal(remaining.length, 1, "late append survived the clear");
+  assert.equal(remaining[0].file, "late.ts");
+  // …and the next consolidation promotes it.
+  await consolidate(repo, fakeEcho, { now: "2026-05-20T00:01:00.000Z", writeTrailers: false });
+  assert.equal(atomsForFile(repo, "late.ts").length, 1, "raced entry reaches the graph");
+  assert.equal(readEntries(repo).length, 0, "journal fully drained after second pass");
+});
+
+test("a torn journal line is skipped by reads and preserved by the clear", async () => {
+  const repo = makeRepo();
+  const now = "2026-05-20T00:00:00.000Z";
+  openDecision(repo, "torn", [], now);
+  writeFileSync(join(repo, "t1.ts"), "1\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "t1.ts"), reason: "r1", ts: now });
+  // A crash mid-append left a truncated JSON line behind…
+  appendFileSync(join(repo, ".git", "cairn", "journal.jsonl"), '{"id":"j-torn","ts"\n', "utf8");
+  writeFileSync(join(repo, "t2.ts"), "2\n");
+  recordEdit(repo, { toolName: "Write", filePath: join(repo, "t2.ts"), reason: "r2", ts: now });
+
+  const entries = readEntries(repo);
+  assert.equal(entries.length, 2, "both valid entries read; torn line skipped");
+
+  gitC(repo, ["add", "-A"]);
+  gitC(repo, ["commit", "-q", "-m", "feat: torn"]);
+  await consolidate(repo, fakeEcho, { now });
+  assert.equal(atomsForFile(repo, "t1.ts").length, 1);
+  assert.equal(atomsForFile(repo, "t2.ts").length, 1);
+  // The torn line is not ours to delete — it survives the consume.
+  const raw = readFileSync(join(repo, ".git", "cairn", "journal.jsonl"), "utf8");
+  assert.ok(raw.includes('{"id":"j-torn","ts"'), "torn write preserved");
+  assert.equal(readEntries(repo).length, 0, "no valid entries left");
+});
+
+test("journal entry ids are unique for same-file same-ms edits with different reasons", () => {
+  const repo = makeRepo();
+  const ts = "2026-05-20T00:00:00.000Z";
+  writeFileSync(join(repo, "u.ts"), "1\n");
+  const a = recordEdit(repo, { toolName: "Write", filePath: join(repo, "u.ts"), reason: "first pass", ts });
+  const b = recordEdit(repo, { toolName: "Write", filePath: join(repo, "u.ts"), reason: "second pass", ts });
+  const c = recordEdit(repo, { toolName: "Write", filePath: join(repo, "u.ts"), reason: "first pass", ts });
+  assert.ok(a && b && c);
+  assert.notEqual(a!.id, b!.id, "different reasons -> different ids");
+  assert.equal(a!.id, c!.id, "a true duplicate (same process, same args) collapses to one id");
+  assert.equal(readEntries(repo).length, 3, "all three appends are on disk");
 });
 
 // --- #15 out-of-repo edits are not journaled ---

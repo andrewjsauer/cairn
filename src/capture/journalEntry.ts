@@ -26,8 +26,14 @@ export function recordEdit(
   if (file.startsWith("..") || file.startsWith("/")) return null;
   const ts = args.ts ?? new Date().toISOString();
   const decisionId = getActiveDecisionId(root);
+  // The id must be unique per APPENDED entry, not just per (file, ts, tool):
+  // consume-by-id clearing would otherwise filter a colliding new entry as
+  // already-consumed. Reason separates same-millisecond edits in one process;
+  // pid separates parallel hook processes (each hook is its own process, so a
+  // counter would never increment). A true duplicate — same process replaying
+  // identical args — still collapses to one id, which is what dedupe wants.
   const entry: JournalEntry = {
-    id: `j-${idFrom(file, ts, args.toolName)}`,
+    id: `j-${idFrom(file, ts, args.toolName, args.reason, String(process.pid))}`,
     ts,
     decisionId,
     file,

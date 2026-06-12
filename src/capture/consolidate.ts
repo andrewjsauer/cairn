@@ -12,7 +12,7 @@ import {
   headSha,
   readEntries,
   readDecisions,
-  clearJournal,
+  consumeEntries,
   readAllAtoms,
   readNote,
   writeNote,
@@ -136,8 +136,9 @@ export async function consolidate(
   // The pre-amend note is merged into the payload above; the orphan can go.
   if (amended && noteSha !== sha) removeNote(sha, root);
 
-  // 6. The journal has been promoted to durable records; clear it.
-  clearJournal(root);
+  // 6. Promote-then-consume: remove exactly the entries read at step 0 —
+  //    anything appended while the model ran survives for the next trigger.
+  consumeEntries(root, new Set(entries.map((e) => e.id)));
 
   // Remember where HEAD ended up so the commit-trigger gate can tell a real
   // new commit from a fresh-looking HEAD that never moved.
