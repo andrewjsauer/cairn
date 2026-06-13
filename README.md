@@ -160,4 +160,4 @@ See [DESIGN.md](DESIGN.md) for the white space, the differentiator, and why each
 
 ## License
 
-MIT.
+Apache-2.0.

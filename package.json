@@ -2,7 +2,7 @@
   "name": "cairn",
   "version": "0.1.0",
   "description": "A self-compacting, code-indexed decision graph for AI coding agents, built on git and Lore-compatible decision records, served over MCP.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Andrew Sauer <andrew@sauerapple.com>",
   "homepage": "https://github.com/andrewjsauer/cairn#readme",
   "repository": {

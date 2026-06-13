@@ -8,7 +8,7 @@
     "name": "Andrew Sauer",
     "email": "andrew@sauerapple.com"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["decision-records", "lore", "mcp", "git-notes", "memory", "coding-agents"],
   "hooks": "./hooks/hooks.json",
   "mcpServers": "./.mcp.json"
