@@ -3,6 +3,24 @@
   "version": "0.1.0",
   "description": "A self-compacting, code-indexed decision graph for AI coding agents, built on git and Lore-compatible decision records, served over MCP.",
   "license": "MIT",
+  "author": "Andrew Sauer <andrew@sauerapple.com>",
+  "homepage": "https://github.com/andrewjsauer/cairn#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewjsauer/cairn.git"
+  },
+  "bugs": {
+    "url": "https://github.com/andrewjsauer/cairn/issues"
+  },
+  "keywords": [
+    "decision-records",
+    "lore",
+    "mcp",
+    "git-notes",
+    "memory",
+    "coding-agents",
+    "claude-code"
+  ],
   "type": "module",
   "bin": {
     "cairn": "./dist/cli.js"

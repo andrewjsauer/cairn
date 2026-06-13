@@ -6,7 +6,7 @@ Git is a perfect record of *what* changed and an amnesiac about *why*. Cairn cap
 
 Cairn does not invent a format and does not run a backend. It emits [Lore](https://github.com/Ian-stetsenko/lore-protocol)-compatible commit trailers, keeps a compacted graph in a `refs/notes/cairn` git-notes namespace, and serves two read tools over the Model Context Protocol. It is single-player and local.
 
-> **Cairn** (working name) — a cairn is a stack of stones hikers build to mark a trail, left so the next person to come through can find the way the last one already worked out. That is exactly the job here: leave a durable marker of the reasoning behind a piece of code, so the next traveler — usually an agent with no memory of yesterday — doesn't have to re-find the path from scratch.
+> **Cairn** — a cairn is a stack of stones hikers build to mark a trail, left so the next person to come through can find the way the last one already worked out. That is exactly the job here: leave a durable marker of the reasoning behind a piece of code, so the next traveler — usually an agent with no memory of yesterday — doesn't have to re-find the path from scratch.
 
 ---
 
@@ -56,7 +56,7 @@ The discipline matters as much as the features. Everything except that middle la
 Requirements: Node 18+, git, and an `ANTHROPIC_API_KEY` (only the capture/consolidation path calls a model — the read path is pure git).
 
 ```bash
-git clone <your-fork-url> cairn && cd cairn
+git clone https://github.com/andrewjsauer/cairn.git && cd cairn
 npm install
 npm run build           # compiles to dist/ — the plugin runs the compiled output
 npm test                # full suite, no API key needed

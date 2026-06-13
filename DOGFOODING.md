@@ -8,7 +8,7 @@ A turnkey path from a fresh clone to watching Cairn work in a real Claude Code s
 
 ```bash
 npm install          # also builds (prepare → tsc)
-npm test             # 28 tests
+npm test             # full suite, no API key needed
 npm run dogfood      # fires EVERY trigger against a throwaway repo, narrated
 ```
 

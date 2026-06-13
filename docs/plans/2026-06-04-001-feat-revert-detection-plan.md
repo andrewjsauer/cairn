@@ -3,7 +3,6 @@ title: "feat: Revert detection — failed approaches flagged, not forgotten"
 type: feat
 status: completed
 date: 2026-06-04
-origin: docs/brainstorms/2026-06-03-revert-detection-requirements.md
 depth: standard
 ---
 

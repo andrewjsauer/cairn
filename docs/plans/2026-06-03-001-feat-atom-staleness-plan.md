@@ -3,7 +3,6 @@ title: "feat: Structural staleness signal for decision atoms"
 type: feat
 status: completed
 date: 2026-06-03
-origin: docs/brainstorms/2026-06-03-atom-staleness-requirements.md
 depth: standard
 ---
 

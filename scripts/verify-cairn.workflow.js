@@ -7,7 +7,9 @@ export const meta = {
   ],
 }
 
-const REPO = '/Users/andrewsauer/Documents/SAUERAPPLE/cairn-app'
+// The repo under audit. Defaults to the directory the workflow is launched
+// from; override with CAIRN_REPO when running from elsewhere.
+const REPO = process.env.CAIRN_REPO || process.cwd()
 
 const CLAIMS = [
   { id: 'C1', title: 'Editing a file writes a durable journal entry immediately (on disk in .git/cairn), surviving /clear',
