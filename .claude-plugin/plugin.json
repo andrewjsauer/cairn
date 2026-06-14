@@ -3,7 +3,7 @@
   "name": "cairn",
   "displayName": "Cairn",
   "version": "0.1.0",
-  "description": "A self-compacting, code-indexed decision graph for AI coding agents. Captures why code is the way it is, stores it git-natively as Lore-compatible records, and serves it back over MCP.",
+  "description": "Stop your AI coding agent from undoing decisions it doesn't remember you made. Captures why code is the way it is as work happens, stores it git-natively as Lore-compatible records, and serves it back to fresh sessions over MCP.",
   "author": {
     "name": "Andrew Sauer",
     "email": "andrew@sauerapple.com"

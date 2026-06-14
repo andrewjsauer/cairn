@@ -1,6 +1,8 @@
 # Cairn
 
-**A self-compacting, code-indexed decision graph for AI coding agents — built on git and Lore-compatible decision records, served over MCP.**
+**Stop your AI coding agent from confidently undoing decisions you made on purpose.** A fresh session has no memory of *why* your code is the way it is — Cairn gives it that memory, so the next traveler doesn't re-derive (and reverse) yesterday's reasoning.
+
+Under the hood: a self-compacting, code-indexed decision graph built on git and Lore-compatible decision records, served to agents over MCP.
 
 Git is a perfect record of *what* changed and an amnesiac about *why*. Cairn captures the reasoning behind code as work happens, stores it in git itself, and hands a fresh agent session the answer to *"why is this code the way it is?"* — bound to the specific decision that touched the code, not to a file, a folder, or a chat log.
 
@@ -91,6 +93,15 @@ Try it:
 | `recent(n)` | The latest `n` decisions across the repo, newest first. Good for orienting a cold session. |
 
 Both are read-only and **budget-bounded**: a result is trimmed to a token ceiling so the graph never outgrows an agent's attention budget as the repo grows.
+
+The same two reads are available to **you**, from the terminal, so you can watch the reasoning trail of your own code accumulate instead of only an agent ever seeing it:
+
+```bash
+cairn why src/engine/recall.ts   # this file's decision chain, oldest → newest
+cairn recent 5                   # the latest 5 decisions across the repo
+```
+
+And when an agent calls `why()` and it changes what the agent was about to do — it keeps code it would have removed, or drops an approach already recorded as rejected — the agent is told to say so in one line, naming the constraint, so the moment Cairn just saved you is visible rather than silent.
 
 ## What gets written to git
 

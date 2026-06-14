@@ -10,6 +10,8 @@
  *   cairn flush                         (PreCompact / SessionEnd / SessionStart; notes-only consolidation + dream if over budget)
  *   cairn dream                         (manual: global store compaction / memory consolidation)
  *   cairn consolidate                   (manual / testing: force commit-style consolidation)
+ *   cairn why "<file>"                  (manual: print a file's decision chain — the human read surface)
+ *   cairn recent [n]                    (manual: print the n most recent decisions)
  *
  * Hooks must never break the session, so every command exits 0 and writes
  * diagnostics to stderr. Durability is already guaranteed by the synchronous
@@ -27,10 +29,16 @@ import {
 import { makeComplete } from "./complete.js";
 import {
   repoRoot,
+  repoRelativePath,
+  renamesInHistory,
   headSha,
   committerDate,
   readLastConsolidatedHead,
 } from "./store/index.js";
+import { recall } from "./engine/index.js";
+import { allAtoms, atomsForFile } from "./read/graph.js";
+import { formatChain, formatRecent } from "./mcp/format.js";
+import { RECALL_TOKEN_BUDGET, DEFAULT_RECENT } from "./config.js";
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
@@ -56,6 +64,10 @@ async function main(): Promise<void> {
       return cmdDream();
     case "consolidate":
       return cmdConsolidate();
+    case "why":
+      return cmdWhy(rest.join(" "));
+    case "recent":
+      return cmdRecent(rest[0]);
     default:
       process.stderr.write(`cairn: unknown command "${command ?? ""}"\n`);
   }
@@ -215,6 +227,43 @@ async function runDream(cwd: string): Promise<void> {
 
 async function cmdConsolidate(): Promise<void> {
   await runConsolidate(projectDir());
+}
+
+/**
+ * The human read surface. `why`/`recent` are agent-facing MCP tools, so the
+ * developer who pays for Cairn never sees the asset accumulating. These two
+ * commands print the exact same recall a fresh agent gets, so a human can read
+ * (and screenshot) the reasoning trail of their own code from the terminal.
+ */
+function cmdWhy(file: string): void {
+  const trimmed = file.trim();
+  if (!trimmed) {
+    process.stdout.write('cairn: no file given; usage: cairn why "<file>"\n');
+    return;
+  }
+  const root = repoRoot(projectDir());
+  if (!root) {
+    process.stderr.write("cairn: not inside a git repository.\n");
+    return;
+  }
+  const rel = repoRelativePath(root, trimmed);
+  const renames = renamesInHistory(root);
+  const atoms = atomsForFile(root, rel, renames);
+  const result = recall(atoms, { file: rel, tokenBudget: RECALL_TOKEN_BUDGET, renames });
+  process.stdout.write(formatChain(rel, result) + "\n");
+}
+
+function cmdRecent(arg?: string): void {
+  const root = repoRoot(projectDir());
+  if (!root) {
+    process.stderr.write("cairn: not inside a git repository.\n");
+    return;
+  }
+  const parsed = arg ? Number.parseInt(arg, 10) : NaN;
+  const count = Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_RECENT;
+  const atoms = allAtoms(root);
+  const result = recall(atoms, { recent: count, tokenBudget: RECALL_TOKEN_BUDGET });
+  process.stdout.write(formatRecent(count, result) + "\n");
 }
 
 /**

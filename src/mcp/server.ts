@@ -45,7 +45,10 @@ server.registerTool(
     description:
       "Return the chain of recorded decisions for a file over time — the intent, " +
       "constraints, and rejected alternatives behind how the code got this way. " +
-      "Reads Cairn's git-notes graph and Lore commit trailers. Budget-bounded.",
+      "Reads Cairn's git-notes graph and Lore commit trailers. Budget-bounded. " +
+      "When a returned decision changes what you were about to do — you keep code " +
+      "you'd have removed, or drop an approach recorded as rejected — say so to the " +
+      "user in one line, naming the constraint, so the help Cairn just gave is visible.",
     inputSchema: {
       file: z.string().describe("Path to the file (absolute or repo-relative)."),
     },
